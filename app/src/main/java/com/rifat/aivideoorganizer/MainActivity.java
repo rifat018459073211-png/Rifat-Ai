@@ -439,10 +439,10 @@ public class MainActivity extends Activity {
         page.addView(heading);
         categoryStatus = label("ভিডিও নির্বাচন করে একটি ক্যাটাগরি বেছে নাও।",14);
         page.addView(categoryStatus);
-        addCategory(page,"😂 Funny Clips");
-        addCategory(page,"⚔ Action / Fighting Clips");
-        addCategory(page,"🎬 Animation Clips");
-        addCategory(page,"⭐ Best Moments");
+        addCategory(page,"Funny Clips");
+        addCategory(page,"Action Clips");
+        addCategory(page,"Animation Clips");
+        addCategory(page,"Best Moments");
 
         Button analyze = button("▶ ভিডিও বিশ্লেষণ শুরু");
         page.addView(analyze);
