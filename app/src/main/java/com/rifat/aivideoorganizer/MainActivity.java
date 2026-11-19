@@ -3,10 +3,13 @@ package com.rifat.aivideoorganizer;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.ContentValues;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.os.Environment;
 import android.provider.Settings;
+import android.provider.MediaStore;
 import android.content.pm.PackageInstaller;
 import androidx.core.content.FileProvider;
 import android.net.Uri;
@@ -66,6 +69,10 @@ public class MainActivity extends Activity {
     private final ExecutorService updateExecutor = Executors.newSingleThreadExecutor();
     private volatile boolean updateCheckRunning = false;
     private File downloadedUpdate;
+    private Uri videoToVideoUri;
+    private TextView videoToVideoSelectedText, videoToVideoStatus;
+    private ProgressBar videoToVideoProgress;
+    private Button videoToVideoGenerateButton;
     private FrameLayout rootLayout;
     private View startupGate;
     private View mainContent;
@@ -244,7 +251,7 @@ public class MainActivity extends Activity {
             new int[]{4,5,6,7},
             new Runnable[]{() -> showGeneratorInfo("Text to Video","একটি দৃশ্য, বিষয়, পরিবেশ, ক্যামেরার গতি ও ভিডিওর ধরন লিখে AI-কে নির্দেশ দেওয়া হয়। Rifat-Ai-তে বাস্তব জেনারেশন ইঞ্জিন এখনো যুক্ত হয়নি।"),
                 () -> showGeneratorInfo("Image to Video","একটি ছবি বেছে নিয়ে কোন অংশ নড়বে, ক্যামেরা কীভাবে চলবে এবং দৃশ্যের মুড কেমন হবে তা বর্ণনা করা হয়। এই জেনারেশন ইঞ্জিন এখনো যুক্ত হয়নি।"),
-                () -> showGeneratorInfo("Video to Video","নিজের ভিডিওর স্টাইল বা দৃশ্য বদলানোর ধারণা। ভিডিও প্রসেসিং মডেল যুক্ত হলে এই অপশন চালু হবে।"),
+                () -> showVideoToVideoPage(),
                 () -> showReadyMadeVideoLibrary()});
         Button tutorial = greenButton("▶  ভিডিও টিউটোরিয়াল");
         page.addView(tutorial, new LinearLayout.LayoutParams(-1, dp(52)));
@@ -259,6 +266,240 @@ public class MainActivity extends Activity {
     private void showGeneratorInfo(String titleText, String description) {
         new AlertDialog.Builder(this).setTitle(titleText).setMessage(description)
             .setPositiveButton("ঠিক আছে", null).show();
+    }
+
+
+    // First local Video-to-Video release: GPU cartoon stylization exported as MP4.
+    private void showVideoToVideoPage() {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(18), dp(22), dp(18), dp(28));
+        page.setBackgroundColor(Color.rgb(246,248,252));
+        scroll.addView(page);
+        TextView title = label("Video to Video • Cartoon", 23);
+        title.setTextColor(Color.rgb(28,66,124));
+        page.addView(title);
+        TextView note = label("ভিডিও বেছে নিয়ে ফোনের GPU দিয়ে কার্টুন-স্টাইল ফিল্টার প্রয়োগ করো। এটি প্রথম স্থানীয় স্টাইল-রূপান্তর সংস্করণ; diffusion AI মডেল নয়।", 13);
+        note.setTextColor(Color.rgb(95,105,120));
+        note.setPadding(0, dp(8), 0, dp(14));
+        page.addView(note);
+        RadioGroup mode = new RadioGroup(this);
+        mode.setOrientation(RadioGroup.VERTICAL);
+        RadioButton realMode = new RadioButton(this);
+        realMode.setText("আসল ভিডিও → কার্টুন");
+        realMode.setId(View.generateViewId());
+        realMode.setChecked(true);
+        RadioButton cartoonMode = new RadioButton(this);
+        cartoonMode.setText("কার্টুন ভিডিও → অন্য কার্টুন স্টাইল");
+        cartoonMode.setId(View.generateViewId());
+        mode.addView(realMode);
+        mode.addView(cartoonMode);
+        page.addView(mode);
+        TextView styleLabel = label("কার্টুন স্টাইল", 14);
+        styleLabel.setTextColor(Color.rgb(35,66,112));
+        styleLabel.setPadding(0, dp(12), 0, dp(5));
+        page.addView(styleLabel);
+        Spinner styles = new Spinner(this);
+        String[] styleNames = {"Classic Anime", "Soft Cartoon", "Bold Comic"};
+        styles.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, styleNames));
+        page.addView(styles);
+        Button pick = greenButton("＋  ভিডিও নির্বাচন করো");
+        LinearLayout.LayoutParams pickParams = new LinearLayout.LayoutParams(-1, dp(52));
+        pickParams.topMargin = dp(14);
+        page.addView(pick, pickParams);
+        videoToVideoSelectedText = label(videoToVideoUri == null ? "এখনো কোনো ভিডিও নির্বাচন করা হয়নি" : "ভিডিও নির্বাচিত হয়েছে", 13);
+        videoToVideoSelectedText.setTextColor(Color.rgb(85,95,110));
+        videoToVideoSelectedText.setPadding(0, dp(10), 0, dp(8));
+        page.addView(videoToVideoSelectedText);
+        pick.setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("video/*");
+            startActivityForResult(intent, 302);
+        });
+        videoToVideoProgress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        videoToVideoProgress.setMax(100);
+        videoToVideoProgress.setProgress(0);
+        videoToVideoProgress.setVisibility(View.GONE);
+        page.addView(videoToVideoProgress, new LinearLayout.LayoutParams(-1, dp(8)));
+        videoToVideoStatus = label("ভিডিও নির্বাচন করে Generate চাপো।", 12);
+        videoToVideoStatus.setTextColor(Color.rgb(90,100,115));
+        videoToVideoStatus.setPadding(0, dp(8), 0, dp(12));
+        page.addView(videoToVideoStatus);
+        videoToVideoGenerateButton = greenButton("▶  GENERATE CARTOON VIDEO");
+        page.addView(videoToVideoGenerateButton, new LinearLayout.LayoutParams(-1, dp(54)));
+        videoToVideoGenerateButton.setOnClickListener(v -> {
+            if (videoToVideoUri == null) {
+                Toast.makeText(this, "আগে একটি ভিডিও নির্বাচন করো", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            startCartoonVideoExport((int) styles.getSelectedItemPosition());
+        });
+        TextView rule = label("নিয়ম: দুই ধরনের ইনপুটেই আউটপুট কার্টুন-স্টাইল থাকবে। কার্টুন ইনপুটকে বাস্তব মানুষের মতো করার কোনো মোড নেই।", 12);
+        rule.setTextColor(Color.rgb(45,115,82));
+        rule.setPadding(0, dp(14), 0, dp(12));
+        page.addView(rule);
+        Button back = button("←  ফিরে যাও");
+        page.addView(back);
+        back.setOnClickListener(v -> showCreateVideoPage());
+        setContentView(scroll);
+    }
+
+    private void startCartoonVideoExport(int style) {
+        if (videoToVideoGenerateButton != null) videoToVideoGenerateButton.setEnabled(false);
+        if (videoToVideoProgress != null) {
+            videoToVideoProgress.setVisibility(View.VISIBLE);
+            videoToVideoProgress.setProgress(0);
+        }
+        if (videoToVideoStatus != null) videoToVideoStatus.setText("ভিডিও প্রস্তুত করা হচ্ছে…");
+        executor.execute(() -> {
+            File input = null;
+            try {
+                input = new File(getCacheDir(), "v2v_input_" + System.currentTimeMillis() + ".mp4");
+                try (InputStream in = getContentResolver().openInputStream(videoToVideoUri);
+                     OutputStream out = new FileOutputStream(input)) {
+                    if (in == null) throw new java.io.IOException("ভিডিওটি পড়া যাচ্ছে না");
+                    byte[] buffer = new byte[64 * 1024];
+                    int count;
+                    while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+                }
+                File movies = new File(getExternalFilesDir(Environment.DIRECTORY_MOVIES), "Rifat-Ai");
+                if (!movies.exists() && !movies.mkdirs()) throw new java.io.IOException("আউটপুট ফোল্ডার তৈরি করা যায়নি");
+                File output = new File(movies, "Cartoon_" + System.currentTimeMillis() + ".mp4");
+                final File inputFile = input;
+                final File outputFile = output;
+                new com.daasuu.gpuv.composer.GPUMp4Composer(input.getAbsolutePath(), output.getAbsolutePath())
+                        .filter(new CartoonGlFilter(style))
+                        .videoBitrate(4_000_000)
+                        .listener(new com.daasuu.gpuv.composer.GPUMp4Composer.Listener() {
+                            @Override public void onProgress(double progress) {
+                                runOnUiThread(() -> {
+                                    if (videoToVideoProgress != null && progress >= 0)
+                                        videoToVideoProgress.setProgress((int)Math.max(0, Math.min(100, progress * 100)));
+                                    if (videoToVideoStatus != null) videoToVideoStatus.setText("কার্টুন ভিডিও তৈরি হচ্ছে… " +
+                                            (progress < 0 ? "" : ((int)(progress * 100)) + "%"));
+                                });
+                            }
+                            @Override public void onCompleted() {
+                                Uri saved = null;
+                                String error = null;
+                                try { saved = publishCartoonVideo(outputFile); }
+                                catch (Exception e) { error = e.getMessage(); }
+                                final Uri savedUri = saved;
+                                final String saveError = error;
+                                runOnUiThread(() -> {
+                                    if (videoToVideoGenerateButton != null) videoToVideoGenerateButton.setEnabled(true);
+                                    if (videoToVideoProgress != null) videoToVideoProgress.setProgress(100);
+                                    if (videoToVideoStatus != null) videoToVideoStatus.setText(savedUri != null
+                                            ? "সম্পন্ন! কার্টুন ভিডিও MP4 হিসেবে সংরক্ষিত হয়েছে।"
+                                            : "ভিডিও তৈরি হয়েছে, তবে সংরক্ষণে সমস্যা: " + saveError);
+                                    if (savedUri != null) {
+                                        Toast.makeText(MainActivity.this, "কার্টুন ভিডিও তৈরি হয়েছে", Toast.LENGTH_LONG).show();
+                                        shareCartoonVideo(savedUri);
+                                    }
+                                });
+                                inputFile.delete();
+                            }
+                            @Override public void onCanceled() {
+                                runOnUiThread(() -> {
+                                    if (videoToVideoGenerateButton != null) videoToVideoGenerateButton.setEnabled(true);
+                                    if (videoToVideoStatus != null) videoToVideoStatus.setText("রূপান্তর বাতিল হয়েছে।");
+                                });
+                                inputFile.delete();
+                            }
+                            @Override public void onFailed(Exception exception) {
+                                runOnUiThread(() -> {
+                                    if (videoToVideoGenerateButton != null) videoToVideoGenerateButton.setEnabled(true);
+                                    if (videoToVideoStatus != null) videoToVideoStatus.setText("রূপান্তর ব্যর্থ: " + exception.getMessage());
+                                    new AlertDialog.Builder(MainActivity.this).setTitle("ভিডিও তৈরি হয়নি")
+                                            .setMessage(exception.getMessage()).setPositiveButton("ঠিক আছে", null).show();
+                                });
+                                inputFile.delete();
+                            }
+                        }).start();
+            } catch (Exception e) {
+                if (input != null) input.delete();
+                runOnUiThread(() -> {
+                    if (videoToVideoGenerateButton != null) videoToVideoGenerateButton.setEnabled(true);
+                    if (videoToVideoStatus != null) videoToVideoStatus.setText("ভিডিও প্রস্তুত করা যায়নি: " + e.getMessage());
+                });
+            }
+        });
+    }
+
+    private Uri publishCartoonVideo(File file) throws Exception {
+        if (Build.VERSION.SDK_INT >= 29) {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Video.Media.DISPLAY_NAME, file.getName());
+            values.put(MediaStore.Video.Media.MIME_TYPE, "video/mp4");
+            values.put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/Rifat-Ai");
+            values.put(MediaStore.Video.Media.IS_PENDING, 1);
+            Uri uri = getContentResolver().insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
+            if (uri == null) throw new java.io.IOException("গ্যালারিতে ফাইল তৈরি করা যায়নি");
+            try (InputStream in = new java.io.FileInputStream(file);
+                 OutputStream out = getContentResolver().openOutputStream(uri)) {
+                if (out == null) throw new java.io.IOException("গ্যালারি ফাইলে লেখা যায়নি");
+                byte[] buffer = new byte[64 * 1024];
+                int count;
+                while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+            } catch (Exception e) {
+                getContentResolver().delete(uri, null, null);
+                throw e;
+            }
+            ContentValues ready = new ContentValues();
+            ready.put(MediaStore.Video.Media.IS_PENDING, 0);
+            getContentResolver().update(uri, ready, null, null);
+            file.delete();
+            return uri;
+        }
+        return FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", file);
+    }
+
+    private void shareCartoonVideo(Uri uri) {
+        Intent share = new Intent(Intent.ACTION_SEND);
+        share.setType("video/mp4");
+        share.putExtra(Intent.EXTRA_STREAM, uri);
+        share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        startActivity(Intent.createChooser(share, "কার্টুন ভিডিও শেয়ার বা সংরক্ষণ করো"));
+    }
+
+    private static final class CartoonGlFilter extends com.daasuu.gpuv.egl.filter.GlFilter {
+        private static final String FRAGMENT =
+                "precision mediump float; varying highp vec2 vTextureCoord; uniform lowp sampler2D sTexture;" +
+                "uniform highp float texelX; uniform highp float texelY; uniform highp float levels;" +
+                "uniform highp float edgePower; uniform highp float edgeLimit;" +
+                "float lum(vec3 c){return dot(c,vec3(0.299,0.587,0.114));}" +
+                "void main(){vec2 uv=vTextureCoord; vec3 c=texture2D(sTexture,uv).rgb;" +
+                "float e=0.0;" +
+                "e+=abs(lum(c)-lum(texture2D(sTexture,uv+vec2(texelX,0.0)).rgb));" +
+                "e+=abs(lum(c)-lum(texture2D(sTexture,uv-vec2(texelX,0.0)).rgb));" +
+                "e+=abs(lum(c)-lum(texture2D(sTexture,uv+vec2(0.0,texelY)).rgb));" +
+                "e+=abs(lum(c)-lum(texture2D(sTexture,uv-vec2(0.0,texelY)).rgb));" +
+                "float line=smoothstep(edgeLimit,edgeLimit+0.10,e*edgePower);" +
+                "vec3 toon=floor(c*levels)/levels;" +
+                "vec3 ink=mix(toon,vec3(0.035,0.035,0.055),line);" +
+                "gl_FragColor=vec4(ink,1.0);}";
+        private final int style;
+        private int width = 720, height = 1280;
+        CartoonGlFilter(int style) {
+            super(DEFAULT_VERTEX_SHADER, FRAGMENT);
+            this.style = style;
+        }
+        @Override public void setFrameSize(int width, int height) {
+            this.width = Math.max(1, width);
+            this.height = Math.max(1, height);
+        }
+        @Override protected void onDraw() {
+            android.opengl.GLES20.glUniform1f(getHandle("texelX"), 1f / width);
+            android.opengl.GLES20.glUniform1f(getHandle("texelY"), 1f / height);
+            float levels = style == 1 ? 7f : (style == 2 ? 4f : 5f);
+            float power = style == 2 ? 4.0f : (style == 1 ? 2.3f : 3.0f);
+            float limit = style == 2 ? 0.11f : (style == 1 ? 0.20f : 0.16f);
+            android.opengl.GLES20.glUniform1f(getHandle("levels"), levels);
+            android.opengl.GLES20.glUniform1f(getHandle("edgePower"), power);
+            android.opengl.GLES20.glUniform1f(getHandle("edgeLimit"), limit);
+        }
     }
 
     private void showVideoTutorials() {
@@ -1226,7 +1467,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode,resultCode,data);
-        if (requestCode == 101 && resultCode == RESULT_OK && data != null && data.getData() != null) {
+        if (requestCode == 302 && resultCode == RESULT_OK && data != null && data.getData() != null) {\n            videoToVideoUri = data.getData();\n            try { getContentResolver().takePersistableUriPermission(videoToVideoUri, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}\n            if (videoToVideoSelectedText != null) videoToVideoSelectedText.setText("ভিডিও নির্বাচিত হয়েছে: " + videoToVideoUri.getLastPathSegment());\n            if (videoToVideoStatus != null) videoToVideoStatus.setText("ভিডিও প্রস্তুত। স্টাইল বেছে Generate চাপো।");\n        }\n        if (requestCode == 101 && resultCode == RESULT_OK && data != null && data.getData() != null) {
             selectedVideo = data.getData();
             try {
                 getContentResolver().takePersistableUriPermission(selectedVideo,Intent.FLAG_GRANT_READ_URI_PERMISSION);
