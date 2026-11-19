@@ -247,8 +247,8 @@ public class MainActivity extends Activity {
         subtitle.setPadding(0, dp(6), 0, dp(14));
         page.addView(subtitle);
         addFeatureGrid(page,
-            new String[]{"Text to Video","Image to Video","Video to Video","Ready-made Videos"},
-            new String[]{"লেখা থেকে ভিডিও তৈরির পদ্ধতি","ছবি থেকে চলমান দৃশ্য","নিজের ভিডিও রূপান্তর","ডেমো ও নমুনা ভিডিও"},
+            new String[]{"Text to Video","Photo to MP4","Video to Video","Ready-made Videos"},
+            new String[]{"লেখা থেকে AI ভিডিও — ইঞ্জিন এখনো যুক্ত হয়নি","ছবি থেকে ৫/১০/১৫ সেকেন্ডের MP4 ভিডিও","নিজের ভিডিওতে কার্টুন ফিল্টার","ডেমো ও নমুনা ভিডিও"},
             new int[]{4,5,6,7},
             new Runnable[]{() -> showGeneratorInfo("Text to Video","একটি দৃশ্য, বিষয়, পরিবেশ, ক্যামেরার গতি ও ভিডিওর ধরন লিখে AI-কে নির্দেশ দেওয়া হয়। Rifat-Ai-তে বাস্তব জেনারেশন ইঞ্জিন এখনো যুক্ত হয়নি।"),
                 () -> showGeneratorInfo("Image to Video","একটি ছবি বেছে নিয়ে কোন অংশ নড়বে, ক্যামেরা কীভাবে চলবে এবং দৃশ্যের মুড কেমন হবে তা বর্ণনা করা হয়। এই জেনারেশন ইঞ্জিন এখনো যুক্ত হয়নি।"),
