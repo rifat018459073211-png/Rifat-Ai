@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.InputType;
 import android.view.Gravity;
 import android.widget.Button;
@@ -20,6 +22,7 @@ import androidx.media3.transformer.Composition;
 import androidx.media3.transformer.EditedMediaItem;
 import androidx.media3.transformer.ExportException;
 import androidx.media3.transformer.ExportResult;
+import androidx.media3.transformer.ProgressHolder;
 import androidx.media3.transformer.Transformer;
 
 import java.io.File;
@@ -43,6 +46,9 @@ public class VideoTrimmerActivity extends Activity {
     private Button exportButton;
     private File exportedFile;
     private Transformer transformer;
+    private final Handler progressHandler = new Handler(Looper.getMainLooper());
+    private final ProgressHolder progressHolder = new ProgressHolder();
+    private Runnable progressUpdater;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
 
     private int dp(int value) {
@@ -107,8 +113,10 @@ public class VideoTrimmerActivity extends Activity {
         page.addView(exportButton);
         exportButton.setOnClickListener(v -> exportClip());
 
-        progress = new ProgressBar(this);
-        progress.setIndeterminate(true);
+        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setMax(100);
+        progress.setProgress(0);
+        progress.setIndeterminate(false);
         progress.setVisibility(android.view.View.GONE);
         page.addView(progress);
 
@@ -120,6 +128,31 @@ public class VideoTrimmerActivity extends Activity {
         page.addView(back);
         back.setOnClickListener(v -> finish());
         setContentView(scroll);
+    }
+
+    private void startProgressUpdates() {
+        stopProgressUpdates();
+        progressUpdater = new Runnable() {
+            @Override public void run() {
+                if (transformer == null || isFinishing()) return;
+                int state = transformer.getProgress(progressHolder);
+                if (state == Transformer.PROGRESS_STATE_AVAILABLE) {
+                    int percent = Math.max(0, Math.min(100, progressHolder.progress));
+                    progress.setIndeterminate(false);
+                    progress.setProgress(percent);
+                    statusLabel.setText("ভিডিও প্রসেস হচ্ছে… " + percent + "%");
+                }
+                progressHandler.postDelayed(this, 350);
+            }
+        };
+        progressHandler.post(progressUpdater);
+    }
+
+    private void stopProgressUpdates() {
+        if (progressUpdater != null) {
+            progressHandler.removeCallbacks(progressUpdater);
+            progressUpdater = null;
+        }
     }
 
     private void chooseVideo() {
@@ -150,7 +183,9 @@ public class VideoTrimmerActivity extends Activity {
 
         exportButton.setEnabled(false);
         progress.setVisibility(android.view.View.VISIBLE);
-        statusLabel.setText("ভিডিও প্রসেস হচ্ছে। ভিডিওর দৈর্ঘ্য ও ফোনের ক্ষমতা অনুযায়ী সময় লাগতে পারে…");
+        progress.setIndeterminate(false);
+        progress.setProgress(0);
+        statusLabel.setText("ভিডিও প্রসেস হচ্ছে… 0%");
         try {
             File dir = new File(getCacheDir(), "video_exports");
             if (!dir.exists() && !dir.mkdirs()) throw new Exception("Export ফোল্ডার তৈরি করা যায়নি।");
@@ -166,6 +201,8 @@ public class VideoTrimmerActivity extends Activity {
             transformer = new Transformer.Builder(this)
                 .addListener(new Transformer.Listener() {
                     @Override public void onCompleted(Composition composition, ExportResult result) {
+                        stopProgressUpdates();
+                        progress.setProgress(100);
                         progress.setVisibility(android.view.View.GONE);
                         statusLabel.setText("ভিডিও তৈরি হয়েছে। এখন MP4 সেভ করার জায়গা বেছে নাও।");
                         Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -176,6 +213,7 @@ public class VideoTrimmerActivity extends Activity {
                     }
 
                     @Override public void onError(Composition composition, ExportResult result, ExportException error) {
+                        stopProgressUpdates();
                         progress.setVisibility(android.view.View.GONE);
                         exportButton.setEnabled(true);
                         statusLabel.setText("ভিডিও Export হয়নি: " + (error.getMessage() == null ? "এই ভিডিও ফরম্যাটটি ফোনে সমর্থিত নয়।" : error.getMessage()));
@@ -184,7 +222,9 @@ public class VideoTrimmerActivity extends Activity {
                 })
                 .build();
             transformer.start(edited, exportedFile.getAbsolutePath());
+            startProgressUpdates();
         } catch (Exception e) {
+            stopProgressUpdates();
             progress.setVisibility(android.view.View.GONE);
             exportButton.setEnabled(true);
             statusLabel.setText("Export শুরু করা যায়নি: " + (e.getMessage() == null ? "অজানা সমস্যা" : e.getMessage()));
@@ -237,6 +277,7 @@ public class VideoTrimmerActivity extends Activity {
             return;
         }
         progress.setVisibility(android.view.View.VISIBLE);
+        progress.setIndeterminate(true);
         statusLabel.setText("MP4 ফাইল সেভ হচ্ছে…");
         io.execute(() -> {
             try (InputStream in = new java.io.FileInputStream(exportedFile);
@@ -263,6 +304,7 @@ public class VideoTrimmerActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        stopProgressUpdates();
         if (transformer != null) transformer.cancel();
         io.shutdownNow();
         super.onDestroy();
