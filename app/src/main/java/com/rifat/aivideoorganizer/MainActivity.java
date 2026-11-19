@@ -368,6 +368,9 @@ public class MainActivity extends Activity {
             startupGate = panel;
             checkForUpdates(false);
         });
+        Button continueOffline = button("এখন অফলাইনে চালিয়ে যাও");
+        panel.addView(continueOffline);
+        continueOffline.setOnClickListener(v -> revealMainScreen());
         setContentView(panel);
         startupGate = panel;
         rootLayout = null;
