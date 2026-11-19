@@ -228,7 +228,7 @@ public class VideoTranscriptActivity extends Activity {
         OnlineRecognizer recognizer = new OnlineRecognizer(null,config);
         OnlineStream stream = recognizer.createStream("");
         List<Caption> result = new ArrayList<>();
-        long fed=0, segmentStart=0;
+        long fedSamples=0, segmentStart=0;
         float[] pending=new float[0];
         MediaExtractor extractor = new MediaExtractor();
         MediaCodec decoder = null;
@@ -238,8 +238,8 @@ public class VideoTranscriptActivity extends Activity {
             int audioTrack=-1;
             for(int i=0;i<extractor.getTrackCount();i++) {
                 MediaFormat f=extractor.getTrackFormat(i);
-                String mime=f.getString(MediaFormat.KEY_MIME);
-                if(mime!=null && mime.startsWith("audio/")) { audioTrack=i; break; }
+                String trackMime=f.getString(MediaFormat.KEY_MIME);
+                if(trackMime!=null && trackMime.startsWith("audio/")) { audioTrack=i; break; }
             }
             if(audioTrack<0) throw new IOException("ভিডিওতে অডিও track নেই");
             extractor.selectTrack(audioTrack);
@@ -250,40 +250,111 @@ public class VideoTranscriptActivity extends Activity {
             boolean inputDone=false,outputDone=false;
             int sampleRate=inputFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)?inputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE):44100;
             int channels=inputFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)?inputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT):2;
+            MediaFormat outputFormat=inputFormat;
+            MediaCodec.BufferInfo info=new MediaCodec.BufferInfo();
             while(!outputDone) {
                 if(!inputDone) {
                     int inIndex=decoder.dequeueInputBuffer(10000);
                     if(inIndex>=0) {
                         ByteBuffer in=decoder.getInputBuffer(inIndex);
+                        if(in==null) throw new IOException("Audio input buffer পাওয়া যায়নি");
+                        in.clear();
                         int size=extractor.readSampleData(in,0);
-                        if(size<0) { decoder.queueInputBuffer(inIndex,0,0,0,MediaCodec.BUFFER_FLAG_END_OF_STREAM); inputDone=true; }
-                        else {
+                        if(size<0) {
+                            decoder.queueInputBuffer(inIndex,0,0,0,MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+                            inputDone=true;
+                        } else {
                             decoder.queueInputBuffer(inIndex,0,size,extractor.getSampleTime(),0);
                             extractor.advance();
                         }
                     }
                 }
-                int outIndex=decoder.dequeueOutputBuffer(new MediaCodec.BufferInfo(),10000);
+                int outIndex=decoder.dequeueOutputBuffer(info,10000);
                 if(outIndex==MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                    MediaFormat f=decoder.getOutputFormat();
-                    if(f.containsKey(MediaFormat.KEY_SAMPLE_RATE)) sampleRate=f.getInteger(MediaFormat.KEY_SAMPLE_RATE);
-                    if(f.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) channels=f.getInteger(MediaFormat.KEY_CHANNEL_COUNT);
+                    outputFormat=decoder.getOutputFormat();
+                    if(outputFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) sampleRate=outputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE);
+                    if(outputFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) channels=outputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT);
                 } else if(outIndex>=0) {
-                    MediaCodec.BufferInfo info=new MediaCodec.BufferInfo();
-                    // Re-fetch the output buffer metadata using a second dequeue is not valid; use the buffer's remaining bytes.
                     ByteBuffer out=decoder.getOutputBuffer(outIndex);
-                    if(out!=null && info.size>0) { /* metadata handled in the corrected path below */ }
+                    if(out!=null && info.size>0) {
+                        out.position(info.offset); out.limit(info.offset+info.size);
+                        int pcmEncoding=android.media.AudioFormat.ENCODING_PCM_16BIT;
+                        if(android.os.Build.VERSION.SDK_INT>=24 && outputFormat.containsKey(MediaFormat.KEY_PCM_ENCODING))
+                            pcmEncoding=outputFormat.getInteger(MediaFormat.KEY_PCM_ENCODING);
+                        int bytesPerSample=pcmEncoding==android.media.AudioFormat.ENCODING_PCM_FLOAT?4:2;
+                        int frameCount=info.size/(bytesPerSample*Math.max(1,channels));
+                        float[] mono=new float[frameCount];
+                        for(int frame=0;frame<frameCount;frame++) {
+                            double sum=0;
+                            for(int ch=0;ch<channels;ch++) {
+                                float value=pcmEncoding==android.media.AudioFormat.ENCODING_PCM_FLOAT
+                                    ? out.getFloat() : out.getShort()/32768.0f;
+                                sum+=value;
+                            }
+                            mono[frame]=(float)(sum/channels);
+                        }
+                        float[] converted=resampleTo16k(mono,sampleRate);
+                        float[] joined=new float[pending.length+converted.length];
+                        System.arraycopy(pending,0,joined,0,pending.length);
+                        System.arraycopy(converted,0,joined,pending.length,converted.length);
+                        int offset=0;
+                        while(joined.length-offset>=1600) {
+                            float[] chunk=new float[1600];
+                            System.arraycopy(joined,offset,chunk,0,1600);
+                            stream.acceptWaveform(chunk,16000);
+                            fedSamples+=1600;
+                            while(recognizer.isReady(stream)) recognizer.decode(stream);
+                            if(recognizer.isEndpoint(stream)) {
+                                String spoken=recognizer.getResult(stream).getText();
+                                if(spoken!=null && !spoken.trim().isEmpty())
+                                    result.add(new Caption(segmentStart*1000/16000,fedSamples*1000/16000,spoken));
+                                recognizer.reset(stream);
+                                segmentStart=fedSamples;
+                            }
+                            offset+=1600;
+                        }
+                        pending=new float[joined.length-offset];
+                        System.arraycopy(joined,offset,pending,0,pending.length);
+                    }
+                    boolean eos=(info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM)!=0;
                     decoder.releaseOutputBuffer(outIndex,false);
-                    if((info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM)!=0) outputDone=true;
+                    if(eos) outputDone=true;
                 }
             }
+            if(pending.length>0) {
+                float[] finalChunk=new float[1600];
+                System.arraycopy(pending,0,finalChunk,0,Math.min(pending.length,1600));
+                stream.acceptWaveform(finalChunk,16000);
+                fedSamples+=pending.length;
+                while(recognizer.isReady(stream)) recognizer.decode(stream);
+            }
+            stream.inputFinished();
+            while(recognizer.isReady(stream)) recognizer.decode(stream);
+            String last=recognizer.getResult(stream).getText();
+            if(last!=null && !last.trim().isEmpty())
+                result.add(new Caption(segmentStart*1000/16000,Math.max(segmentStart+1,fedSamples)*1000/16000,last));
         } finally {
             try { if(decoder!=null) { decoder.stop(); decoder.release(); } } catch(Exception ignored) {}
             extractor.release();
+            try { stream.release(); } catch(Exception ignored) {}
+            try { recognizer.release(); } catch(Exception ignored) {}
         }
-        stream.release();
-        recognizer.release();
         return result;
+    }
+
+    private static float[] resampleTo16k(float[] input,int sourceRate) {
+        if(sourceRate==16000) return input;
+        if(sourceRate<=0 || input.length==0) return new float[0];
+        int count=(int)((long)input.length*16000/sourceRate);
+        float[] output=new float[count];
+        for(int i=0;i<count;i++) {
+            double position=(double)i*sourceRate/16000.0;
+            int left=Math.min(input.length-1,(int)position);
+            int right=Math.min(input.length-1,left+1);
+            double fraction=position-left;
+            output[i]=(float)(input[left]*(1.0-fraction)+input[right]*fraction);
+        }
+        return output;
     }
 
     private static String time(long ms) {
