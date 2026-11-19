@@ -13,6 +13,8 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.*;
 import android.graphics.Color;
 import android.graphics.Bitmap;
@@ -66,6 +68,22 @@ public class MainActivity extends Activity {
     private File downloadedUpdate;
 
     private int dp(int n) { return (int)(n * getResources().getDisplayMetrics().density); }
+
+    // Lightweight native entrance motion; no extra animation library or network dependency.
+    private void animateChildren(ViewGroup container) {
+        for (int i = 0; i < container.getChildCount(); i++) {
+            View child = container.getChildAt(i);
+            child.setAlpha(0f);
+            child.setTranslationY(dp(12));
+            child.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setStartDelay(Math.min(i * 35L, 350L))
+                .setDuration(320L)
+                .setInterpolator(new DecelerateInterpolator())
+                .start();
+        }
+    }
 
     private TextView label(String s, int size) {
         TextView t = new TextView(this);
@@ -201,6 +219,7 @@ public class MainActivity extends Activity {
         note.setPadding(0,dp(22),0,0);
         page.addView(note);
         setContentView(scroll);
+        animateChildren(page);
         checkForUpdates(false);
     }
 
@@ -641,6 +660,7 @@ public class MainActivity extends Activity {
         status.setPadding(0,dp(18),0,0);
         panel.addView(status);
         setContentView(panel);
+        animateChildren(panel);
     }
 
     private void showResult(String result) {
@@ -664,6 +684,7 @@ public class MainActivity extends Activity {
         panel.addView(back);
         back.setOnClickListener(v -> recreate());
         setContentView(scroll);
+        animateChildren(panel);
     }
 
     private void showFailure(String message) {
