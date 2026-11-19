@@ -142,7 +142,8 @@ public class MainActivity extends Activity {
         createParams.topMargin = dp(10);
         dashboard.addView(create, createParams);
         create.setOnClickListener(v -> showCreateVideoPage());
-        addDashboardCard(dashboard, "ভিডিওর সেরা মুহূর্ত", "ভিডিও বিশ্লেষণ করে সম্ভাব্য হাইলাইট খুঁজে নাও", () -> startActivity(new Intent(this, BestMomentsActivity.class)));\n        addDashboardCard(dashboard, "ভিডিও কাটার ও MP4 Export", "ভিডিওর অংশ কেটে ফোনে MP4 হিসেবে সেভ করো — API key লাগবে না", () -> startActivity(new Intent(this, VideoTrimmerActivity.class)));
+        addDashboardCard(dashboard, "ভিডিওর সেরা মুহূর্ত", "ভিডিও বিশ্লেষণ করে সম্ভাব্য হাইলাইট খুঁজে নাও", () -> startActivity(new Intent(this, BestMomentsActivity.class)));
+        addDashboardCard(dashboard, "ভিডিও কাটার ও MP4 Export", "ভিডিওর অংশ কেটে ফোনে MP4 হিসেবে সেভ করো — API key লাগবে না", () -> startActivity(new Intent(this, VideoTrimmerActivity.class)));
         addDashboardCard(dashboard, "অ্যাপ আপডেট", "সর্বশেষ সংস্করণ পরীক্ষা করো", () -> checkForUpdates(true));
         TextView footer = label("Rifat-Ai • Free workspace", 12);
         footer.setTextColor(Color.rgb(125,132,145));
