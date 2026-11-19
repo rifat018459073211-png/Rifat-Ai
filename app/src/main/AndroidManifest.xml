@@ -24,6 +24,9 @@
             android:name=".PhotoToVideoActivity"
             android:exported="false" />
         <activity
+            android:name=".BestMomentsActivity"
+            android:exported="false" />
+        <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
