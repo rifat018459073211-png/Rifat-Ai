@@ -240,13 +240,15 @@ public class MainActivity extends Activity {
         page.setPadding(dp(16), dp(22), dp(16), dp(28));
         page.setBackgroundColor(Color.rgb(246,248,252));
         scroll.addView(page);
-        TextView title = label("Create Video", 25);
-        title.setTextColor(Color.rgb(28,66,124));
-        page.addView(title);
-        TextView subtitle = label("তোমার প্রয়োজন অনুযায়ী একটি পদ্ধতি বেছে নাও।", 14);
-        subtitle.setTextColor(Color.rgb(100,110,125));
-        subtitle.setPadding(0, dp(6), 0, dp(14));
-        page.addView(subtitle);
+        Button back = button("←");
+        back.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+        back.setGravity(Gravity.CENTER);
+        back.setContentDescription("হোমে ফিরে যাও");
+        back.setBackground(roundBackground(Color.WHITE, Color.rgb(226,232,241), 12));
+        LinearLayout.LayoutParams backParams = new LinearLayout.LayoutParams(dp(48), dp(46));
+        backParams.bottomMargin = dp(12);
+        page.addView(back, backParams);
+        back.setOnClickListener(v -> recreate());
         addFeatureGrid(page,
             new String[]{"Text to Image","Text to Video","Image to Video","Photo to MP4","Video to Video","Video to Text","AI Subtitles","ভিডিও আইডিয়া"},
             new String[]{"লেখা থেকে ছবি — ইঞ্জিন এখনো নেই","লেখা থেকে AI ভিডিও — ইঞ্জিন এখনো নেই","ছবি থেকে AI motion — ইঞ্জিন এখনো নেই","স্থির ছবি থেকে MP4 export; AI motion নয়","ভিডিওতে স্থানীয় cartoon filter","ভিডিওর বাংলা কথা লিখে নাও","বাংলা SRT subtitle তৈরি ও সেভ","ভিডিও তৈরির prompt ধারণা"},
@@ -263,9 +265,6 @@ public class MainActivity extends Activity {
         Button tutorial = greenButton("▶  ভিডিও টিউটোরিয়াল");
         page.addView(tutorial, new LinearLayout.LayoutParams(-1, dp(52)));
         tutorial.setOnClickListener(v -> showVideoTutorials());
-        Button back = button("←  হোমে ফিরে যাও");
-        page.addView(back);
-        back.setOnClickListener(v -> recreate());
         setContentView(scroll);
         animateChildren(page);
     }
