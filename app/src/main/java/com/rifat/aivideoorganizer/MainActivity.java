@@ -121,7 +121,22 @@ public class MainActivity extends Activity {
         addCategory(page,"🎬 Animation Clips");
         addCategory(page,"⭐ Best Moments");
 
-        TextView note = label("এটি এখন UI ও ভিডিও প্রিভিউয়ের ধাপ। AI দিয়ে দৃশ্য বিশ্লেষণ, স্বয়ংক্রিয় ক্লিপ নির্বাচন ও FFmpeg কাটিং পরের ধাপে যুক্ত ও পরীক্ষা করা হবে।",13);
+        Button analyze = button("▶ ভিডিও বিশ্লেষণ শুরু");
+        page.addView(analyze);
+        analyze.setOnClickListener(v -> {
+            if (selectedVideo == null) {
+                categoryStatus.setText("আগে একটি ভিডিও নির্বাচন করো।");
+                return;
+            }
+            String chosenCategory = categoryStatus.getText().toString();
+            if (!chosenCategory.startsWith("নির্বাচিত ক্যাটাগরি:")) {
+                categoryStatus.setText("আগে একটি ক্যাটাগরি নির্বাচন করো।");
+                return;
+            }
+            showProcessingScreen(selectedVideo);
+        });
+
+        TextView note = label("AI বিশ্লেষণ ও FFmpeg ক্লিপ তৈরি Backend সংযোগের পর চালু হবে।",13);
         note.setPadding(0,dp(22),0,0);
         page.addView(note);
         setContentView(scroll);
@@ -134,6 +149,52 @@ public class MainActivity extends Activity {
             if (selectedVideo == null) categoryStatus.setText("আগে একটি ভিডিও নির্বাচন করো।");
             else categoryStatus.setText("নির্বাচিত ক্যাটাগরি: " + category + "\nক্লিপ বিশ্লেষণ ও এক্সপোর্ট পরের ধাপে যুক্ত হবে।");
         });
+    }
+
+    private void showProcessingScreen(Uri video) {
+        ScrollView processingScroll = new ScrollView(this);
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(22),dp(30),dp(22),dp(24));
+        panel.setGravity(Gravity.CENTER_HORIZONTAL);
+        panel.setBackgroundColor(Color.rgb(246,248,252));
+        processingScroll.addView(panel);
+
+        TextView title = label("AI ভিডিও প্রসেসিং",24);
+        title.setGravity(Gravity.CENTER);
+        panel.addView(title);
+
+        TextView file = label("নির্বাচিত ভিডিও: " + video.getLastPathSegment(),14);
+        file.setPadding(0,dp(18),0,dp(18));
+        panel.addView(file);
+
+        ProgressBar progress = new ProgressBar(this);
+        progress.setIndeterminate(true);
+        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(-1,dp(8));
+        progressParams.setMargins(0,dp(12),0,dp(20));
+        panel.addView(progress, progressParams);
+
+        TextView percent = label("অগ্রগতি: অপেক্ষমাণ",18);
+        percent.setGravity(Gravity.CENTER);
+        panel.addView(percent);
+
+        TextView status = label(
+            "প্রসেসিং স্ক্রিন প্রস্তুত। কিন্তু Gemini Backend এখনো অ্যাপের সঙ্গে সংযুক্ত নয়, তাই ভিডিও আপলোড বা AI বিশ্লেষণ শুরু হয়নি। Backend যুক্ত হলে এখানে প্রকৃত আপলোড/প্রসেসিং অগ্রগতি ও ধাপ দেখানো হবে।",
+            15
+        );
+        status.setPadding(0,dp(18),0,dp(24));
+        panel.addView(status);
+
+        Button back = button("← ভিডিও নির্বাচনে ফিরে যাও");
+        panel.addView(back);
+        back.setOnClickListener(v -> setContentView(buildMainScreen()));
+        setContentView(processingScroll);
+    }
+
+    private View buildMainScreen() {
+        // Recreate the main screen by restarting this Activity without losing the selected video.
+        recreate();
+        return new View(this);
     }
 
     private void openVideoPicker() {
