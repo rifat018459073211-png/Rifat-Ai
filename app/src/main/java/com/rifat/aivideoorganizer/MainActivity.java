@@ -137,7 +137,8 @@ public class MainActivity extends Activity {
             if (selectedDuration.equals("নিজের সময় লিখব")) {
                 String value = customDuration.getText().toString().trim();
                 if (value.isEmpty()) { customDuration.setError("সময় লিখো"); return; }
-                durationStatus.setText("নির্বাচিত কাস্টম সময়: " + value);
+                selectedDuration = value + " (কাস্টম)";
+                durationStatus.setText("নির্বাচিত কাস্টম সময়: " + selectedDuration);
             } else durationStatus.setText("নির্বাচিত: " + selectedDuration);
         });
 
@@ -161,6 +162,16 @@ public class MainActivity extends Activity {
             if (selectedCategory.isEmpty()) {
                 categoryStatus.setText("আগে একটি ক্যাটাগরি নির্বাচন করো।");
                 return;
+            }
+            if (selectedDuration.equals("নিজের সময় লিখব")) {
+                String custom = customDuration.getText().toString().trim();
+                if (custom.isEmpty()) {
+                    customDuration.setError("ক্লিপের সময় লিখো, যেমন ৪৫ সেকেন্ড বা ২ মিনিট");
+                    customDuration.requestFocus();
+                    return;
+                }
+                selectedDuration = custom + " (কাস্টম)";
+                durationStatus.setText("নির্বাচিত কাস্টম সময়: " + selectedDuration);
             }
             String token = readStoredToken();
             if (token == null || token.isEmpty()) showTokenDialog();
@@ -277,10 +288,13 @@ public class MainActivity extends Activity {
             JSONObject prompt = new JSONObject();
             prompt.put("text",
                 "Analyze these sampled frames from one video in chronological order. " +
+                "Video total duration: " + (durationMs / 1000.0) + " seconds. " +
                 "Requested category: " + selectedCategory + ". Requested clip duration: " + selectedDuration + ". " +
-                "Identify promising moments for this category. Return concise Bengali guidance with approximate timestamps in seconds, " +
-                "a short reason for each moment, and a suggested clip start/end time. Do not claim to have analyzed frames that are not supplied. " +
-                "Mention that timestamps are estimates based on the sampled frames.");
+                "Analyze only the supplied frames, which are sampled across the full video. " +
+                "Return concise Bengali guidance with approximate timestamps in seconds, a short reason for each moment, " +
+                "and a suggested clip start/end time. Keep the suggested duration close to the requested duration when possible. " +
+                "Never invent visual details between frames. Clearly state that timestamps are estimates based on sparse samples. " +
+                "If the frames do not provide enough evidence, say so.");
             parts.put(prompt);
             for (int i=0;i<FRAME_COUNT;i++) {
                 long timeMs = FRAME_COUNT == 1 ? 0 : (durationMs - 1) * i / (FRAME_COUNT - 1);
@@ -356,9 +370,14 @@ public class MainActivity extends Activity {
     }
 
     private Bitmap scaleBitmap(Bitmap source, int maxWidth) {
-        if (source.getWidth() <= maxWidth) return source;
-        int height = Math.max(1,source.getHeight() * maxWidth / source.getWidth());
-        return Bitmap.createScaledBitmap(source,maxWidth,height,true);
+        int sourceWidth = source.getWidth();
+        int sourceHeight = source.getHeight();
+        int longest = Math.max(sourceWidth, sourceHeight);
+        if (longest <= maxWidth) return source;
+        float ratio = (float) maxWidth / (float) longest;
+        int width = Math.max(1, Math.round(sourceWidth * ratio));
+        int height = Math.max(1, Math.round(sourceHeight * ratio));
+        return Bitmap.createScaledBitmap(source, width, height, true);
     }
 
     private String readStream(InputStream stream) throws Exception {
@@ -404,7 +423,12 @@ public class MainActivity extends Activity {
         panel.setPadding(dp(20),dp(24),dp(20),dp(24));
         panel.setBackgroundColor(Color.rgb(246,248,252));
         scroll.addView(panel);
-        panel.addView(label("Gemini বিশ্লেষণের ফলাফল",23));
+        TextView resultTitle = label("Gemini বিশ্লেষণের ফলাফল",23);
+        resultTitle.setTextColor(Color.rgb(35,75,145));
+        panel.addView(resultTitle);
+        TextView resultMeta = label("ক্যাটাগরি: " + selectedCategory + "  •  লক্ষ্য দৈর্ঘ্য: " + selectedDuration,13);
+        resultMeta.setPadding(0,dp(8),0,0);
+        panel.addView(resultMeta);
         TextView answer = label(result,16);
         answer.setPadding(0,dp(18),0,dp(22));
         panel.addView(answer);
