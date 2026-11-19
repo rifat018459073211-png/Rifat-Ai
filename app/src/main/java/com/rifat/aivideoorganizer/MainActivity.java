@@ -1467,7 +1467,13 @@ public class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode,resultCode,data);
-        if (requestCode == 302 && resultCode == RESULT_OK && data != null && data.getData() != null) {\n            videoToVideoUri = data.getData();\n            try { getContentResolver().takePersistableUriPermission(videoToVideoUri, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}\n            if (videoToVideoSelectedText != null) videoToVideoSelectedText.setText("ভিডিও নির্বাচিত হয়েছে: " + videoToVideoUri.getLastPathSegment());\n            if (videoToVideoStatus != null) videoToVideoStatus.setText("ভিডিও প্রস্তুত। স্টাইল বেছে Generate চাপো।");\n        }\n        if (requestCode == 101 && resultCode == RESULT_OK && data != null && data.getData() != null) {
+        if (requestCode == 302 && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            videoToVideoUri = data.getData();
+            try { getContentResolver().takePersistableUriPermission(videoToVideoUri, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
+            if (videoToVideoSelectedText != null) videoToVideoSelectedText.setText("ভিডিও নির্বাচিত হয়েছে: " + videoToVideoUri.getLastPathSegment());
+            if (videoToVideoStatus != null) videoToVideoStatus.setText("ভিডিও প্রস্তুত। স্টাইল বেছে Generate চাপো।");
+        }
+        if (requestCode == 101 && resultCode == RESULT_OK && data != null && data.getData() != null) {
             selectedVideo = data.getData();
             try {
                 getContentResolver().takePersistableUriPermission(selectedVideo,Intent.FLAG_GRANT_READ_URI_PERMISSION);
