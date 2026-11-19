@@ -3,6 +3,12 @@ package com.rifat.aivideoorganizer;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.provider.Settings;
+import android.content.pm.PackageInstaller;
+import androidx.core.content.FileProvider;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -21,11 +27,14 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.KeyStore;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -36,6 +45,9 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
     private static final String API_URL = "https://rifat-ai.rifat018459073211.workers.dev/v1/generate";
+    private static final String RELEASE_API = "https://api.github.com/repos/rifat018459073211-png/Rifat-Ai/releases/latest";
+    private static final String APK_ASSET_NAME = "Rifat-Ai.apk";
+    private static final long MAX_APK_BYTES = 100L * 1024L * 1024L;
     private static final String PREFS = "rifat_ai_secure_settings";
     private static final String TOKEN_KEY = "worker_token";
     private static final String KEY_ALIAS = "RifatAiWorkerTokenKey";
@@ -49,6 +61,9 @@ public class MainActivity extends Activity {
     private String selectedCategory = "";
     private String selectedDuration = "AI নিজে নির্বাচন করবে";
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final ExecutorService updateExecutor = Executors.newSingleThreadExecutor();
+    private volatile boolean updateCheckRunning = false;
+    private File downloadedUpdate;
 
     private int dp(int n) { return (int)(n * getResources().getDisplayMetrics().density); }
 
@@ -78,6 +93,10 @@ public class MainActivity extends Activity {
         TextView intro = label("ভিডিও বেছে নাও, সেরা মুহূর্ত খুঁজে ক্লিপ তৈরি করো।",15);
         intro.setPadding(0,dp(10),0,dp(14));
         page.addView(intro);
+
+        Button updateButton = button("↻ অ্যাপ আপডেট পরীক্ষা করো");
+        page.addView(updateButton);
+        updateButton.setOnClickListener(v -> checkForUpdates(true));
 
         Button choose = button("＋ ভিডিও নির্বাচন করো");
         page.addView(choose);
@@ -182,6 +201,214 @@ public class MainActivity extends Activity {
         note.setPadding(0,dp(22),0,0);
         page.addView(note);
         setContentView(scroll);
+        checkForUpdates(false);
+    }
+
+    private void checkForUpdates(boolean showUpToDate) {
+        if (updateCheckRunning) {
+            if (showUpToDate) Toast.makeText(this, "আপডেট পরীক্ষা চলছে…", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        updateCheckRunning = true;
+        if (showUpToDate) Toast.makeText(this, "নতুন আপডেট খোঁজা হচ্ছে…", Toast.LENGTH_SHORT).show();
+        updateExecutor.execute(() -> {
+            try {
+                HttpURLConnection c = (HttpURLConnection) new URL(RELEASE_API).openConnection();
+                c.setConnectTimeout(12000);
+                c.setReadTimeout(15000);
+                c.setRequestProperty("Accept", "application/vnd.github+json");
+                c.setRequestProperty("User-Agent", "Rifat-Ai-Android-Updater");
+                try {
+                    int status = c.getResponseCode();
+                    if (status == 404) throw new Exception("এখনো কোনো প্রকাশিত আপডেট নেই।");
+                    if (status < 200 || status >= 300) throw new Exception("GitHub থেকে আপডেটের তথ্য পাওয়া যায়নি (HTTP " + status + ")");
+                    JSONObject release = new JSONObject(readStream(c.getInputStream()));
+                    String tag = release.optString("tag_name", "").trim();
+                    String latestVersion = tag.startsWith("v") ? tag.substring(1) : tag;
+                    String currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+                    if (latestVersion.isEmpty()) throw new Exception("রিলিজের ভার্সন নম্বর পাওয়া যায়নি।");
+                    if (compareVersions(latestVersion, currentVersion) <= 0) {
+                        runOnUiThread(() -> {
+                            updateCheckRunning = false;
+                            if (showUpToDate) new AlertDialog.Builder(this)
+                                .setTitle("আপডেট নেই")
+                                .setMessage("তুমি সর্বশেষ ভার্সন (" + currentVersion + ") ব্যবহার করছ।")
+                                .setPositiveButton("ঠিক আছে", null).show();
+                        });
+                        return;
+                    }
+                    JSONArray assets = release.optJSONArray("assets");
+                    JSONObject apk = null;
+                    if (assets != null) for (int i = 0; i < assets.length(); i++) {
+                        JSONObject item = assets.getJSONObject(i);
+                        if (APK_ASSET_NAME.equals(item.optString("name"))) { apk = item; break; }
+                    }
+                    if (apk == null) throw new Exception("নতুন ভার্সনের APK GitHub Release-এ পাওয়া যায়নি।");
+                    String downloadUrl = apk.optString("browser_download_url", "");
+                    Uri downloadUri = Uri.parse(downloadUrl);
+                    if (!"https".equalsIgnoreCase(downloadUri.getScheme()) ||
+                        !"github.com".equalsIgnoreCase(downloadUri.getHost())) {
+                        throw new Exception("নিরাপত্তার কারণে অচেনা ডাউনলোড ঠিকানা গ্রহণ করা হয়নি।");
+                    }
+                    long size = apk.optLong("size", 0);
+                    if (size > MAX_APK_BYTES) throw new Exception("APK ফাইলটি নির্ধারিত ১০০ MB সীমার চেয়ে বড়।");
+                    String digest = apk.optString("digest", "");
+                    String notes = release.optString("body", "").trim();
+                    String finalNotes = notes.isEmpty() ? "নতুন ভার্সনে উন্নতি ও বাগ সংশোধন রয়েছে।" : notes;
+                    runOnUiThread(() -> {
+                        updateCheckRunning = false;
+                        showUpdateAvailable(currentVersion, latestVersion, finalNotes, downloadUrl, digest, size);
+                    });
+                } finally { c.disconnect(); }
+            } catch (Exception e) {
+                String message = safeMessage(e);
+                runOnUiThread(() -> {
+                    updateCheckRunning = false;
+                    if (showUpToDate) new AlertDialog.Builder(this)
+                        .setTitle("আপডেট পরীক্ষা করা যায়নি")
+                        .setMessage(message)
+                        .setPositiveButton("ঠিক আছে", null).show();
+                });
+            }
+        });
+    }
+
+    private int compareVersions(String a, String b) {
+        String[] aa = a.split("[^0-9]+");
+        String[] bb = b.split("[^0-9]+");
+        int count = Math.max(aa.length, bb.length);
+        for (int i = 0; i < count; i++) {
+            long av = i < aa.length && !aa[i].isEmpty() ? parseVersionPart(aa[i]) : 0;
+            long bv = i < bb.length && !bb[i].isEmpty() ? parseVersionPart(bb[i]) : 0;
+            if (av != bv) return Long.compare(av, bv);
+        }
+        return 0;
+    }
+
+    private long parseVersionPart(String value) {
+        try { return Long.parseLong(value); } catch (Exception e) { return 0; }
+    }
+
+    private void showUpdateAvailable(String current, String latest, String notes, String url, String digest, long size) {
+        String sizeText = size > 0 ? String.format(java.util.Locale.US, "%.1f MB", size / 1048576.0) : "আকার অজানা";
+        new AlertDialog.Builder(this)
+            .setTitle("নতুন আপডেট পাওয়া গেছে")
+            .setMessage("বর্তমান ভার্সন: " + current + "\\nনতুন ভার্সন: " + latest +
+                "\\nAPK: " + sizeText + "\\n\\nআপডেটের বিবরণ:\\n" + notes)
+            .setNegativeButton("পরে", null)
+            .setPositiveButton("ডাউনলোড", (d, w) -> downloadUpdate(url, digest, size, latest))
+            .show();
+    }
+
+    private void downloadUpdate(String url, String expectedDigest, long expectedSize, String version) {
+        ProgressBar progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setMax(100);
+        TextView status = label("আপডেট ডাউনলোড হচ্ছে…", 15);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(12), dp(20), dp(8));
+        box.addView(status);
+        box.addView(progress);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Rifat-Ai আপডেট")
+            .setView(box)
+            .setCancelable(false)
+            .setNegativeButton("বন্ধ", (d, w) -> {})
+            .create();
+        dialog.show();
+        updateExecutor.execute(() -> {
+            File target = null;
+            try {
+                HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+                c.setConnectTimeout(15000);
+                c.setReadTimeout(30000);
+                c.setRequestProperty("User-Agent", "Rifat-Ai-Android-Updater");
+                try {
+                    int code = c.getResponseCode();
+                    if (code < 200 || code >= 300) throw new Exception("APK ডাউনলোড ব্যর্থ (HTTP " + code + ")");
+                    long declared = c.getContentLengthLong();
+                    if (declared > MAX_APK_BYTES) throw new Exception("APK ফাইলটি ১০০ MB-এর বেশি।");
+                    File dir = new File(getCacheDir(), "updates");
+                    if (!dir.exists() && !dir.mkdirs()) throw new Exception("আপডেট ফোল্ডার তৈরি করা যায়নি।");
+                    target = new File(dir, "Rifat-Ai-" + version + ".apk");
+                    MessageDigest sha = MessageDigest.getInstance("SHA-256");
+                    long total = 0;
+                    try (InputStream in = c.getInputStream(); FileOutputStream out = new FileOutputStream(target)) {
+                        byte[] buffer = new byte[8192];
+                        int n;
+                        while ((n = in.read(buffer)) != -1) {
+                            total += n;
+                            if (total > MAX_APK_BYTES) throw new Exception("APK ফাইলটি ১০০ MB সীমা ছাড়িয়েছে।");
+                            out.write(buffer, 0, n);
+                            sha.update(buffer, 0, n);
+                            int percent = declared > 0 ? (int) Math.min(100, total * 100 / declared) : -1;
+                            int shown = percent;
+                            runOnUiThread(() -> {
+                                if (!isFinishing()) {
+                                    progress.setIndeterminate(shown < 0);
+                                    if (shown >= 0) progress.setProgress(shown);
+                                    status.setText(shown >= 0 ? "ডাউনলোড: " + shown + "%" : "ডাউনলোড হচ্ছে…");
+                                }
+                            });
+                        }
+                    }
+                    if (expectedSize > 0 && total != expectedSize) throw new Exception("ডাউনলোড করা APK-এর আকার মেলেনি।");
+                    if (expectedDigest.startsWith("sha256:")) {
+                        String actual = toHex(sha.digest());
+                        String expected = expectedDigest.substring(7).toLowerCase(java.util.Locale.US);
+                        if (!actual.equals(expected)) throw new Exception("APK নিরাপত্তা যাচাই ব্যর্থ হয়েছে। ফাইলটি ইনস্টল করা হবে না।");
+                    }
+                    if (total < 1000) throw new Exception("ডাউনলোড করা APK ফাইলটি অসম্পূর্ণ মনে হচ্ছে।");
+                    downloadedUpdate = target;
+                    runOnUiThread(() -> {
+                        if (dialog.isShowing()) dialog.dismiss();
+                        new AlertDialog.Builder(this)
+                            .setTitle("ডাউনলোড সম্পন্ন")
+                            .setMessage("ভার্সন " + version + " ডাউনলোড হয়েছে। এখন Android-এর ইনস্টলেশন ধাপ খুলবে।")
+                            .setNegativeButton("পরে", null)
+                            .setPositiveButton("ইনস্টল", (d, w) -> installDownloadedUpdate())
+                            .show();
+                    });
+                } finally { c.disconnect(); }
+            } catch (Exception e) {
+                if (target != null) target.delete();
+                String message = safeMessage(e);
+                runOnUiThread(() -> {
+                    if (dialog.isShowing()) dialog.dismiss();
+                    new AlertDialog.Builder(this).setTitle("আপডেট ডাউনলোড হয়নি")
+                        .setMessage(message).setPositiveButton("ঠিক আছে", null).show();
+                });
+            }
+        });
+    }
+
+    private String toHex(byte[] bytes) {
+        StringBuilder out = new StringBuilder();
+        for (byte b : bytes) out.append(String.format(java.util.Locale.US, "%02x", b & 0xff));
+        return out.toString();
+    }
+
+    private void installDownloadedUpdate() {
+        if (downloadedUpdate == null || !downloadedUpdate.exists()) {
+            Toast.makeText(this, "আগে আপডেট ডাউনলোড করো।", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getPackageManager().canRequestPackageInstalls()) {
+            Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:" + getPackageName()));
+            startActivity(settings);
+            Toast.makeText(this, "Rifat-Ai-এর জন্য এই উৎস থেকে অ্যাপ ইনস্টল করার অনুমতি দাও, তারপর আবার Install চাপো।", Toast.LENGTH_LONG).show();
+            return;
+        }
+        try {
+            Uri apkUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", downloadedUpdate);
+            Intent install = new Intent(Intent.ACTION_VIEW);
+            install.setDataAndType(apkUri, "application/vnd.android.package-archive");
+            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(install);
+        } catch (Exception e) {
+            Toast.makeText(this, "ইনস্টল স্ক্রিন খোলা যায়নি: " + safeMessage(e), Toast.LENGTH_LONG).show();
+        }
     }
 
     private void addCategory(LinearLayout page, String category) {
@@ -476,6 +703,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         executor.shutdownNow();
+        updateExecutor.shutdownNow();
         super.onDestroy();
     }
 }
