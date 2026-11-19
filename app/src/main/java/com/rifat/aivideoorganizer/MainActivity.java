@@ -68,6 +68,7 @@ public class MainActivity extends Activity {
     private File downloadedUpdate;
     private FrameLayout rootLayout;
     private View startupGate;
+    private View mainContent;
 
     private int dp(int n) { return (int)(n * getResources().getDisplayMetrics().density); }
 
@@ -220,6 +221,7 @@ public class MainActivity extends Activity {
         TextView note = label("বিশ্লেষণের জন্য ভিডিওর সম্পূর্ণ ফাইল নয়, কয়েকটি নমুনা ফ্রেম Gemini-তে পাঠানো হবে।",13);
         note.setPadding(0,dp(22),0,0);
         page.addView(note);
+        mainContent = scroll;
         rootLayout = new FrameLayout(this);
         rootLayout.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
         startupGate = buildCheckingScreen();
@@ -245,7 +247,7 @@ public class MainActivity extends Activity {
                 c.setRequestProperty("User-Agent", "Rifat-Ai-Android-Updater");
                 try {
                     int status = c.getResponseCode();
-                    if (status == 404) { runOnUiThread(() -> revealMainScreen()); return; }
+                    if (status == 404) { runOnUiThread(() -> { updateCheckRunning = false; revealMainScreen(); }); return; }
                     if (status < 200 || status >= 300) throw new Exception("GitHub থেকে আপডেটের তথ্য পাওয়া যায়নি (HTTP " + status + ")");
                     JSONObject release = new JSONObject(readStream(c.getInputStream()));
                     String tag = release.optString("tag_name", "").trim();
@@ -338,6 +340,7 @@ public class MainActivity extends Activity {
     private void revealMainScreen() {
         if (startupGate == null) return;
         if (rootLayout != null) rootLayout.removeView(startupGate);
+        else if (mainContent != null) setContentView(mainContent);
         startupGate = null;
         rootLayout = null;
     }
