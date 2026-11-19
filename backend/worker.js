@@ -66,13 +66,20 @@ export default {
       return json({
         ok: true,
         configuredProjects: projects.length,
-        credentialNames: projects.map((p) => p.name),
-        note: "Secret values are never returned."
+        note: "Secret values and credential names are never returned."
       }, 200, cors);
     }
 
     if (url.pathname !== "/v1/generate" || request.method !== "POST") {
       return json({ error: "Not found" }, 404, cors);
+    }
+
+    if (!env.APP_ACCESS_TOKEN) {
+      return json({ error: "Backend access token is not configured." }, 503, cors);
+    }
+    const authorization = request.headers.get("authorization") || "";
+    if (authorization !== `Bearer ${env.APP_ACCESS_TOKEN}`) {
+      return json({ error: "Unauthorized." }, 401, cors);
     }
 
     const contentLength = Number(request.headers.get("content-length") || 0);
@@ -105,9 +112,8 @@ export default {
       return json({ error: "No Gemini project credentials are configured on the backend." }, 503, cors);
     }
 
-    // Project credentials are independent. Fail over only for transient server/network
-    // failures. A 429 is returned to the caller so the job can wait for quota reset;
-    // it is never used as a reason to cycle projects and evade a quota.
+    // Try configured independent projects in order only for transient network/5xx
+    // service failures. A 429 is returned immediately; never rotate to evade quota.
     let lastStatus = 502;
     for (const project of projects) {
       let response;
@@ -140,7 +146,7 @@ export default {
         });
       }
 
-      if (response.status === 400 || response.status === 401 || response.status === 403 || response.status === 404) {
+      if ([400, 401, 403, 404].includes(response.status)) {
         return json({
           error: safeErrorMessage(response.status),
           status: response.status,
@@ -151,8 +157,6 @@ export default {
       if (response.status < 500) {
         return json({ error: safeErrorMessage(response.status), status: response.status }, response.status, cors);
       }
-      // A 5xx response may indicate a temporary service failure. Try another
-      // independently configured project, with a hard cap of 24 attempts.
     }
 
     return json({
