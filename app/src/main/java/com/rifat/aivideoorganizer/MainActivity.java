@@ -187,14 +187,8 @@ public class MainActivity extends Activity {
 
         Button back = button("← ভিডিও নির্বাচনে ফিরে যাও");
         panel.addView(back);
-        back.setOnClickListener(v -> setContentView(buildMainScreen()));
+        back.setOnClickListener(v -> recreate());
         setContentView(processingScroll);
-    }
-
-    private View buildMainScreen() {
-        // Recreate the main screen by restarting this Activity without losing the selected video.
-        recreate();
-        return new View(this);
     }
 
     private void openVideoPicker() {
