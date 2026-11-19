@@ -248,15 +248,17 @@ public class MainActivity extends Activity {
         subtitle.setPadding(0, dp(6), 0, dp(14));
         page.addView(subtitle);
         addFeatureGrid(page,
-            new String[]{"Text to Image","Text to Video","Image to Video","Photo to MP4","Video to Video","ভিডিও আইডিয়া"},
-            new String[]{"লেখা থেকে ছবি — ফ্রি জেনারেশন ইঞ্জিন এখনো নেই","লেখা থেকে AI ভিডিও — ইঞ্জিন এখনো নেই","ছবি থেকে AI motion — ইঞ্জিন এখনো নেই","স্থির ছবি থেকে MP4 export; AI motion নয়","ভিডিওতে স্থানীয় cartoon filter","ভিডিও তৈরির prompt ধারণা"},
-            new int[]{4,5,6,7,0,1},
+            new String[]{"Text to Image","Text to Video","Image to Video","Photo to MP4","Video to Video","Video to Text","AI Subtitles","ভিডিও আইডিয়া"},
+            new String[]{"লেখা থেকে ছবি — ইঞ্জিন এখনো নেই","লেখা থেকে AI ভিডিও — ইঞ্জিন এখনো নেই","ছবি থেকে AI motion — ইঞ্জিন এখনো নেই","স্থির ছবি থেকে MP4 export; AI motion নয়","ভিডিওতে স্থানীয় cartoon filter","ভিডিওর বাংলা কথা লিখে নাও","বাংলা SRT subtitle তৈরি ও সেভ","ভিডিও তৈরির prompt ধারণা"},
+            new int[]{4,5,6,7,0,1,2,3},
             new Runnable[]{
-                () -> showGeneratorInfo("Text to Image","এই ফিচারের জন্য একটি সত্যিকারের image-generation engine প্রয়োজন। যাচাইকৃত, নির্ভরযোগ্য free-tier engine না পাওয়ায় এখনো Generate চালু করা হয়নি।"),
-                () -> showGeneratorInfo("Text to Video","ফ্রি ও এই ফোনে সমর্থিত বাস্তব video-generation engine এখনো যাচাই হয়নি। তাই ভুয়া Generate বোতাম রাখা হয়নি।"),
-                () -> showGeneratorInfo("Image to Video","AI motion generation engine এখনো যুক্ত হয়নি। Photo to MP4 দিয়ে স্থির ছবি থেকে ভিডিও export করা যায়, কিন্তু ছবির ভেতরের বস্তু নড়ে না।"),
+                () -> showGeneratorInfo("Text to Image","বাস্তব image-generation engine এই ফোনে নির্ভরযোগ্যভাবে চালানোর উপযোগিতা এখনো যাচাই হয়নি।"),
+                () -> showGeneratorInfo("Text to Video","ফ্রি ও এই ফোনে সমর্থিত বাস্তব text-to-video engine এখনো যাচাই হয়নি।"),
+                () -> showGeneratorInfo("Image to Video","AI motion engine এখনো নেই। Photo to MP4 শুধু স্থির ছবি export করে।"),
                 () -> startActivity(new Intent(this, PhotoToVideoActivity.class)),
                 () -> showVideoToVideoPage(),
+                () -> startActivity(new Intent(this, VideoTranscriptActivity.class)),
+                () -> startActivity(new Intent(this, VideoTranscriptActivity.class)),
                 () -> showReadyMadeVideoLibrary()});
         Button tutorial = greenButton("▶  ভিডিও টিউটোরিয়াল");
         page.addView(tutorial, new LinearLayout.LayoutParams(-1, dp(52)));
