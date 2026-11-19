@@ -281,6 +281,8 @@ public class VideoTranscriptActivity extends Activity {
                         int pcmEncoding=android.media.AudioFormat.ENCODING_PCM_16BIT;
                         if(android.os.Build.VERSION.SDK_INT>=24 && outputFormat.containsKey(MediaFormat.KEY_PCM_ENCODING))
                             pcmEncoding=outputFormat.getInteger(MediaFormat.KEY_PCM_ENCODING);
+                        // MediaCodec PCM buffers are little-endian; set the order before reading samples.
+                        out.order(ByteOrder.LITTLE_ENDIAN);
                         int bytesPerSample=pcmEncoding==android.media.AudioFormat.ENCODING_PCM_FLOAT?4:2;
                         int frameCount=info.size/(bytesPerSample*Math.max(1,channels));
                         float[] mono=new float[frameCount];
