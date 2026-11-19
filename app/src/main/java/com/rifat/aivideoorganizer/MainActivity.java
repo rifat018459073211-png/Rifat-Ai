@@ -66,6 +66,8 @@ public class MainActivity extends Activity {
     private final ExecutorService updateExecutor = Executors.newSingleThreadExecutor();
     private volatile boolean updateCheckRunning = false;
     private File downloadedUpdate;
+    private FrameLayout rootLayout;
+    private View startupGate;
 
     private int dp(int n) { return (int)(n * getResources().getDisplayMetrics().density); }
 
@@ -111,10 +113,6 @@ public class MainActivity extends Activity {
         TextView intro = label("ভিডিও বেছে নাও, সেরা মুহূর্ত খুঁজে ক্লিপ তৈরি করো।",15);
         intro.setPadding(0,dp(10),0,dp(14));
         page.addView(intro);
-
-        Button updateButton = button("↻ অ্যাপ আপডেট পরীক্ষা করো");
-        page.addView(updateButton);
-        updateButton.setOnClickListener(v -> checkForUpdates(true));
 
         Button historyButton = button("▤ সংরক্ষিত বিশ্লেষণ / History");
         page.addView(historyButton);
@@ -222,7 +220,11 @@ public class MainActivity extends Activity {
         TextView note = label("বিশ্লেষণের জন্য ভিডিওর সম্পূর্ণ ফাইল নয়, কয়েকটি নমুনা ফ্রেম Gemini-তে পাঠানো হবে।",13);
         note.setPadding(0,dp(22),0,0);
         page.addView(note);
-        setContentView(scroll);
+        rootLayout = new FrameLayout(this);
+        rootLayout.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
+        startupGate = buildCheckingScreen();
+        rootLayout.addView(startupGate, new FrameLayout.LayoutParams(-1, -1));
+        setContentView(rootLayout);
         animateChildren(page);
         checkForUpdates(false);
     }
@@ -243,7 +245,7 @@ public class MainActivity extends Activity {
                 c.setRequestProperty("User-Agent", "Rifat-Ai-Android-Updater");
                 try {
                     int status = c.getResponseCode();
-                    if (status == 404) throw new Exception("এখনো কোনো প্রকাশিত আপডেট নেই।");
+                    if (status == 404) { runOnUiThread(() -> revealMainScreen()); return; }
                     if (status < 200 || status >= 300) throw new Exception("GitHub থেকে আপডেটের তথ্য পাওয়া যায়নি (HTTP " + status + ")");
                     JSONObject release = new JSONObject(readStream(c.getInputStream()));
                     String tag = release.optString("tag_name", "").trim();
@@ -253,7 +255,8 @@ public class MainActivity extends Activity {
                     if (compareVersions(latestVersion, currentVersion) <= 0) {
                         runOnUiThread(() -> {
                             updateCheckRunning = false;
-                            if (showUpToDate) new AlertDialog.Builder(this)
+                            if (startupGate != null) revealMainScreen();
+                            else if (showUpToDate) new AlertDialog.Builder(this)
                                 .setTitle("আপডেট নেই")
                                 .setMessage("তুমি সর্বশেষ ভার্সন (" + currentVersion + ") ব্যবহার করছ।")
                                 .setPositiveButton("ঠিক আছে", null).show();
@@ -280,14 +283,15 @@ public class MainActivity extends Activity {
                     String finalNotes = notes.isEmpty() ? "নতুন ভার্সনে উন্নতি ও বাগ সংশোধন রয়েছে।" : notes;
                     runOnUiThread(() -> {
                         updateCheckRunning = false;
-                        showUpdateAvailable(currentVersion, latestVersion, finalNotes, downloadUrl, digest, size);
+                        showForcedUpdateScreen(currentVersion, latestVersion, finalNotes, downloadUrl, digest, size);
                     });
                 } finally { c.disconnect(); }
             } catch (Exception e) {
                 String message = safeMessage(e);
                 runOnUiThread(() -> {
                     updateCheckRunning = false;
-                    if (showUpToDate) new AlertDialog.Builder(this)
+                    if (startupGate != null) showStartupError(message);
+                    else if (showUpToDate) new AlertDialog.Builder(this)
                         .setTitle("আপডেট পরীক্ষা করা যায়নি")
                         .setMessage(message)
                         .setPositiveButton("ঠিক আছে", null).show();
@@ -312,15 +316,115 @@ public class MainActivity extends Activity {
         try { return Long.parseLong(value); } catch (Exception e) { return 0; }
     }
 
-    private void showUpdateAvailable(String current, String latest, String notes, String url, String digest, long size) {
+    private View buildCheckingScreen() {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setGravity(Gravity.CENTER);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(28), dp(28), dp(28), dp(28));
+        panel.setBackgroundColor(Color.rgb(22, 28, 42));
+        TextView title = label("Rifat-Ai", 28);
+        title.setTextColor(Color.WHITE);
+        title.setGravity(Gravity.CENTER);
+        panel.addView(title);
+        TextView status = label("আপডেট পরীক্ষা করা হচ্ছে…", 16);
+        status.setTextColor(Color.WHITE);
+        status.setGravity(Gravity.CENTER);
+        status.setPadding(0, dp(16), 0, dp(10));
+        panel.addView(status);
+        panel.addView(new ProgressBar(this));
+        return panel;
+    }
+
+    private void revealMainScreen() {
+        if (startupGate == null) return;
+        if (rootLayout != null) rootLayout.removeView(startupGate);
+        startupGate = null;
+        rootLayout = null;
+    }
+
+    private void showStartupError(String message) {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setGravity(Gravity.CENTER);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(28), dp(28), dp(28), dp(28));
+        panel.setBackgroundColor(Color.rgb(22, 28, 42));
+        TextView title = label("আপডেট যাচাই করা যায়নি", 23);
+        title.setTextColor(Color.WHITE);
+        title.setGravity(Gravity.CENTER);
+        panel.addView(title);
+        TextView detail = label(message + "\n\nইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করো।", 15);
+        detail.setTextColor(Color.WHITE);
+        detail.setGravity(Gravity.CENTER);
+        detail.setPadding(0, dp(16), 0, dp(20));
+        panel.addView(detail);
+        Button retry = button("আবার চেষ্টা করো");
+        panel.addView(retry);
+        retry.setOnClickListener(v -> {
+            panel.removeView(retry);
+            panel.addView(new ProgressBar(this));
+            startupGate = panel;
+            checkForUpdates(false);
+        });
+        setContentView(panel);
+        startupGate = panel;
+        rootLayout = null;
+    }
+
+    private void showForcedUpdateScreen(String current, String latest, String notes, String url, String digest, long size) {
         String sizeText = size > 0 ? String.format(java.util.Locale.US, "%.1f MB", size / 1048576.0) : "আকার অজানা";
-        new AlertDialog.Builder(this)
-            .setTitle("নতুন আপডেট পাওয়া গেছে")
-            .setMessage("বর্তমান ভার্সন: " + current + "\\nনতুন ভার্সন: " + latest +
-                "\\nAPK: " + sizeText + "\\n\\nআপডেটের বিবরণ:\\n" + notes)
-            .setNegativeButton("পরে", null)
-            .setPositiveButton("ডাউনলোড", (d, w) -> downloadUpdate(url, digest, size, latest))
-            .show();
+        LinearLayout panel = new LinearLayout(this);
+        panel.setGravity(Gravity.CENTER);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(26), dp(30), dp(26), dp(30));
+        panel.setBackgroundColor(Color.rgb(190, 18, 38));
+
+        TextView warning = label("⚠", 58);
+        warning.setTextColor(Color.WHITE);
+        warning.setGravity(Gravity.CENTER);
+        panel.addView(warning);
+
+        TextView title = label("অ্যাপের নতুন আপডেট প্রয়োজন", 25);
+        title.setTextColor(Color.WHITE);
+        title.setGravity(Gravity.CENTER);
+        title.setPadding(0, dp(12), 0, dp(14));
+        panel.addView(title);
+
+        TextView message = label("তোমার ব্যবহৃত Rifat-Ai APK পুরোনো হয়ে গেছে। অ্যাপটি ব্যবহার করতে নতুন APK ডাউনলোড ও ইনস্টল করো।", 17);
+        message.setTextColor(Color.WHITE);
+        message.setGravity(Gravity.CENTER);
+        panel.addView(message);
+
+        TextView versions = label("বর্তমান: " + current + "   •   নতুন: " + latest + "\nAPK: " + sizeText, 14);
+        versions.setTextColor(Color.WHITE);
+        versions.setGravity(Gravity.CENTER);
+        versions.setPadding(0, dp(18), 0, dp(14));
+        panel.addView(versions);
+
+        if (!notes.trim().isEmpty()) {
+            TextView details = label("আপডেটের বিবরণ: " + notes, 13);
+            details.setTextColor(Color.WHITE);
+            details.setGravity(Gravity.CENTER);
+            details.setPadding(0, 0, 0, dp(16));
+            panel.addView(details);
+        }
+
+        Button download = button("⬇  নতুন APK ডাউনলোড করুন");
+        download.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
+        download.setAllCaps(false);
+        download.setTextColor(Color.rgb(160, 12, 30));
+        download.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));
+        panel.addView(download, new LinearLayout.LayoutParams(-1, dp(58)));
+        download.setOnClickListener(v -> downloadUpdate(url, digest, size, latest));
+
+        TextView footer = label("নতুন APK ইনস্টল না করা পর্যন্ত মূল ফিচার বন্ধ থাকবে।", 13);
+        footer.setTextColor(Color.WHITE);
+        footer.setGravity(Gravity.CENTER);
+        footer.setPadding(0, dp(18), 0, 0);
+        panel.addView(footer);
+
+        startupGate = null;
+        rootLayout = null;
+        setContentView(panel);
     }
 
     private void downloadUpdate(String url, String expectedDigest, long expectedSize, String version) {
