@@ -3,13 +3,14 @@ on:
   workflow_dispatch:
   push:
     branches: [ai-video-organizer]
+    tags: ['v*']
     paths:
       - 'app/**'
       - '*.gradle'
       - 'settings.gradle'
       - '.github/workflows/android-apk.yml'
 permissions:
-  contents: read
+  contents: write
   actions: write
 jobs:
   build:
@@ -28,10 +29,21 @@ jobs:
           gradle-version: '8.9'
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: Rifat-Ai-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+      - name: Prepare release APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Rifat-Ai.apk
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" app/build/outputs/apk/debug/Rifat-Ai.apk \
+            --title "Rifat-Ai ${GITHUB_REF_NAME}" \
+            --notes "Rifat-Ai Android app update. Install the APK using the in-app updater."
