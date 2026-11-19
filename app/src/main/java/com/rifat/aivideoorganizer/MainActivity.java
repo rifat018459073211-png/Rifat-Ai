@@ -100,6 +100,77 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        ScrollView dashboardScroll = new ScrollView(this);
+        LinearLayout dashboard = new LinearLayout(this);
+        dashboard.setOrientation(LinearLayout.VERTICAL);
+        dashboard.setPadding(dp(18), dp(24), dp(18), dp(28));
+        dashboard.setBackgroundColor(Color.rgb(246,248,252));
+        dashboardScroll.addView(dashboard);
+
+        TextView title = label("Rifat-Ai", 29);
+        title.setTextColor(Color.rgb(35,75,145));
+        title.setGravity(Gravity.CENTER);
+        dashboard.addView(title);
+        TextView intro = label("তোমার ভিডিও, AI টুল ও শেখার সবকিছু এক জায়গায়।", 15);
+        intro.setGravity(Gravity.CENTER);
+        intro.setPadding(0, dp(8), 0, dp(22));
+        dashboard.addView(intro);
+
+        TextView section = label("তোমার ওয়ার্কস্পেস", 19);
+        section.setPadding(0, dp(4), 0, dp(10));
+        dashboard.addView(section);
+        addDashboardCard(dashboard, "🎞️  AI ভিডিও অর্গানাইজার",
+            "ভিডিও বেছে নিয়ে AI দিয়ে সেরা মুহূর্ত বিশ্লেষণ করো", () -> showVideoOrganizerPage());
+        addDashboardCard(dashboard, "📚  টিউটোরিয়াল ও শেখার কেন্দ্র",
+            "ভিডিও এডিটিং, AI বিশ্লেষণ ও অ্যাপ ব্যবহারের গাইড পড়ো", () -> showLearningCenter());
+        addDashboardCard(dashboard, "✨  ভিডিও জেনারেটর",
+            "AI দিয়ে নতুন ভিডিও তৈরির ফিচার ও পরিকল্পনা দেখো", () -> showVideoGeneratorPage());
+        addDashboardCard(dashboard, "▤  সংরক্ষিত বিশ্লেষণ",
+            "আগের AI বিশ্লেষণগুলো দেখো ও পরিচালনা করো", () -> showHistory());
+        addDashboardCard(dashboard, "🔄  অ্যাপ আপডেট",
+            "সর্বশেষ সংস্করণ আছে কি না পরীক্ষা করো", () -> checkForUpdates(true));
+
+        TextView footer = label("Rifat-Ai • বিনামূল্যের টুল ও শেখার জায়গা", 12);
+        footer.setGravity(Gravity.CENTER);
+        footer.setPadding(0, dp(20), 0, 0);
+        dashboard.addView(footer);
+
+        mainContent = dashboardScroll;
+        rootLayout = new FrameLayout(this);
+        rootLayout.addView(dashboardScroll, new FrameLayout.LayoutParams(-1, -1));
+        startupGate = buildCheckingScreen();
+        rootLayout.addView(startupGate, new FrameLayout.LayoutParams(-1, -1));
+        setContentView(rootLayout);
+        animateChildren(dashboard);
+        checkForUpdates(false);
+    }
+
+    private void addDashboardCard(LinearLayout parent, String title, String description, Runnable action) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(16), dp(15), dp(16), dp(15));
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setColor(Color.WHITE);
+        shape.setCornerRadius(dp(16));
+        shape.setStroke(dp(1), Color.rgb(225, 231, 241));
+        card.setBackground(shape);
+        card.setElevation(dp(2));
+        TextView heading = label(title, 17);
+        heading.setTextColor(Color.rgb(35,75,145));
+        TextView detail = label(description, 13);
+        detail.setTextColor(Color.rgb(85,92,105));
+        detail.setPadding(0, dp(6), 0, 0);
+        card.addView(heading);
+        card.addView(detail);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.bottomMargin = dp(12);
+        parent.addView(card, params);
+        card.setClickable(true);
+        card.setFocusable(true);
+        card.setOnClickListener(v -> action.run());
+    }
+
+    private void showVideoOrganizerPage() {
         ScrollView scroll = new ScrollView(this);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
@@ -221,14 +292,104 @@ public class MainActivity extends Activity {
         TextView note = label("বিশ্লেষণের জন্য ভিডিওর সম্পূর্ণ ফাইল নয়, কয়েকটি নমুনা ফ্রেম Gemini-তে পাঠানো হবে।",13);
         note.setPadding(0,dp(22),0,0);
         page.addView(note);
-        mainContent = scroll;
-        rootLayout = new FrameLayout(this);
-        rootLayout.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
-        startupGate = buildCheckingScreen();
-        rootLayout.addView(startupGate, new FrameLayout.LayoutParams(-1, -1));
-        setContentView(rootLayout);
+        Button backHome = button("← হোমে ফিরে যাও");
+        page.addView(backHome, 0);
+        backHome.setOnClickListener(v -> recreate());
+        setContentView(scroll);
         animateChildren(page);
-        checkForUpdates(false);
+    }
+
+    private void showLearningCenter() {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(18), dp(22), dp(18), dp(26));
+        page.setBackgroundColor(Color.rgb(246,248,252));
+        scroll.addView(page);
+        TextView title = label("টিউটোরিয়াল ও শেখার কেন্দ্র", 24);
+        title.setTextColor(Color.rgb(35,75,145));
+        page.addView(title);
+        TextView intro = label("সহজ বাংলায় ধাপে ধাপে শেখার গাইড। প্রতিটি বিষয় খুলে পড়তে পারো।", 14);
+        intro.setPadding(0, dp(8), 0, dp(16));
+        page.addView(intro);
+        addDashboardCard(page, "১. Rifat-Ai কীভাবে কাজ করে",
+            "ভিডিও নির্বাচন থেকে AI বিশ্লেষণ পর্যন্ত পুরো প্রক্রিয়া", () -> showTutorialDetail("Rifat-Ai কীভাবে কাজ করে",
+            "১) AI ভিডিও অর্গানাইজার খুলে ফোন থেকে একটি ভিডিও নির্বাচন করো।\n\n২) ভিডিওর ক্যাটাগরি এবং কাঙ্ক্ষিত ক্লিপের দৈর্ঘ্য বেছে নাও।\n\n৩) বিশ্লেষণ শুরু করলে অ্যাপ ভিডিওর পাঁচটি নমুনা ফ্রেম নেয় এবং Cloudflare Worker-এর মাধ্যমে Gemini-তে পাঠায়।\n\n৪) Gemini নমুনা দেখে সম্ভাব্য ভালো মুহূর্তের আনুমানিক টাইমস্ট্যাম্প ও কারণ জানায়।\n\nমনে রেখো: পাঁচটি নমুনা ফ্রেম দিয়ে পুরো ভিডিওর প্রতিটি মুহূর্ত দেখা হয় না; তাই সময়গুলো আনুমানিক।"));
+        addDashboardCard(page, "২. ভিডিও নির্বাচন ও প্রিভিউ",
+            "ফোনের গ্যালারি/ফাইল থেকে ভিডিও নেওয়া", () -> showTutorialDetail("ভিডিও নির্বাচন ও প্রিভিউ",
+            "AI ভিডিও অর্গানাইজার খুলে ‘ভিডিও নির্বাচন করো’ চাপো। Android-এর ফাইল পিকার থেকে একটি ভিডিও বেছে নাও। ভিডিওটি প্রিভিউতে দেখা যাবে। ফাইলের অনুমতি না দিলে আবার নির্বাচন করতে হতে পারে।"));
+        addDashboardCard(page, "৩. ক্যাটাগরি ও ক্লিপের দৈর্ঘ্য",
+            "Funny, Action, Animation ও Best Moments বেছে নেওয়া", () -> showTutorialDetail("ক্যাটাগরি ও ক্লিপের দৈর্ঘ্য",
+            "ভিডিও নির্বাচনের পর একটি ক্যাটাগরি বেছে নাও। তারপর AI-কে দৈর্ঘ্য নিজে বেছে দিতে পারো, অথবা তালিকা থেকে সময় নির্বাচন করতে পারো। নিজের সময় দিলে উদাহরণ হিসেবে ৪৫ সেকেন্ড বা ২ মিনিট লিখতে পারো।"));
+        addDashboardCard(page, "৪. AI বিশ্লেষণ কীভাবে কাজ করে",
+            "নমুনা ফ্রেম, Gemini ও ফলাফল বোঝা", () -> showTutorialDetail("AI বিশ্লেষণ কীভাবে কাজ করে",
+            "অ্যাপ সম্পূর্ণ ভিডিও আপলোড করে না। ভিডিওর শুরু, মাঝামাঝি ও শেষসহ পাঁচটি নমুনা ফ্রেম তৈরি করে। এগুলো Worker-এর মাধ্যমে Gemini-তে যায়। AI দৃশ্যগুলো দেখে সম্ভাব্য মুহূর্তের পরামর্শ দেয়। নমুনার মাঝের অংশ সরাসরি দেখা হয় না, তাই ফলাফল যাচাই করে নেবে।"));
+        addDashboardCard(page, "৫. History ব্যবহার",
+            "পুরোনো বিশ্লেষণ দেখা ও মুছে ফেলা", () -> showTutorialDetail("History ব্যবহার",
+            "হোম থেকে ‘সংরক্ষিত বিশ্লেষণ’ খুললে সাম্প্রতিক ২০টি ফলাফল পাওয়া যাবে। কোনো এন্ট্রিতে চাপলে বিস্তারিত দেখা যাবে। Clear History চাপলে নিশ্চিত করার পর সংরক্ষিত ফলাফল ফোন থেকে মুছে যাবে।"));
+        addDashboardCard(page, "৬. Token ও নিরাপত্তা",
+            "Backend token কী এবং কীভাবে নিরাপদে রাখবে", () -> showTutorialDetail("Token ও নিরাপত্তা",
+            "APP_ACCESS_TOKEN হলো Worker-এ প্রবেশের গোপন অনুমতি। এটি কাউকে পাঠাবে না, স্ক্রিনশট বা GitHub কোডে প্রকাশ করবে না। অ্যাপে দিলে Android Keystore দিয়ে এনক্রিপ্ট করে ফোনে রাখা হয়। সন্দেহ হলে Cloudflare-এ token পরিবর্তন করো।"));
+        addDashboardCard(page, "৭. আপডেট ও সমস্যা সমাধান",
+            "নতুন APK, ইন্টারনেট ও সাধারণ সমস্যা", () -> showTutorialDetail("আপডেট ও সমস্যা সমাধান",
+            "অ্যাপ চালুর সময় নতুন সংস্করণ পরীক্ষা করে। আপডেট থাকলে লাল পর্দায় নতুন APK ডাউনলোডের নির্দেশ দেখায়। APK ইনস্টল করতে Android-এর অনুমতি লাগবে। আপডেট যাচাইয়ের সার্ভার না চললে আবার চেষ্টা করতে পারো অথবা অফলাইনে অ্যাপ খুলতে পারো। বিশ্লেষণের জন্য ইন্টারনেট লাগবে।"));
+        Button back = button("← হোমে ফিরে যাও");
+        page.addView(back);
+        back.setOnClickListener(v -> recreate());
+        setContentView(scroll);
+        animateChildren(page);
+    }
+
+    private void showTutorialDetail(String titleText, String bodyText) {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(20), dp(24), dp(20), dp(28));
+        page.setBackgroundColor(Color.rgb(246,248,252));
+        scroll.addView(page);
+        TextView title = label(titleText, 23);
+        title.setTextColor(Color.rgb(35,75,145));
+        page.addView(title);
+        TextView body = label(bodyText, 16);
+        body.setPadding(0, dp(18), 0, dp(24));
+        page.addView(body);
+        Button back = button("← টিউটোরিয়ালে ফিরে যাও");
+        page.addView(back);
+        back.setOnClickListener(v -> showLearningCenter());
+        setContentView(scroll);
+        animateChildren(page);
+    }
+
+    private void showVideoGeneratorPage() {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(20), dp(24), dp(20), dp(28));
+        page.setBackgroundColor(Color.rgb(246,248,252));
+        scroll.addView(page);
+        TextView title = label("ভিডিও জেনারেটর", 24);
+        title.setTextColor(Color.rgb(35,75,145));
+        page.addView(title);
+        TextView status = label("এই ফিচারটি এখনো তৈরি হয়নি। ভুলভাবে কাজ করছে এমন বোতাম না দিয়ে এখানে এর শেখার ও পরিকল্পনার অংশ রাখা হয়েছে।", 15);
+        status.setPadding(0, dp(12), 0, dp(18));
+        page.addView(status);
+        addDashboardCard(page, "✍️ Text-to-Video",
+            "লেখা থেকে ভিডিও তৈরির ধারণা ও উদাহরণ", () -> showTutorialDetail("Text-to-Video",
+            "Text-to-Video ব্যবস্থায় একটি বর্ণনা লিখলে AI সেই নির্দেশনা অনুযায়ী ভিডিও তৈরি করে। ভালো ফলের জন্য বিষয়, পরিবেশ, ক্যামেরার দৃশ্য, সময়কাল ও ভিজ্যুয়াল স্টাইল পরিষ্কারভাবে বর্ণনা করতে হয়। Rifat-Ai-তে এই জেনারেশন সুবিধা এখনো যুক্ত হয়নি।"));
+        addDashboardCard(page, "🖼️ Image-to-Video",
+            "ছবি থেকে অ্যানিমেটেড ভিডিও তৈরির ধারণা", () -> showTutorialDetail("Image-to-Video",
+            "Image-to-Video-তে একটি স্থির ছবি থেকে নড়াচড়া-সহ ছোট ভিডিও তৈরি করা হয়। কোন অংশ নড়বে, ক্যামেরা কীভাবে চলবে এবং দৃশ্যের ধারাবাহিকতা কেমন হবে তা নির্ধারণ করতে হয়। এই ফিচারটি এখনো Rifat-Ai-তে চালু নয়।"));
+        addDashboardCard(page, "🎬 ভবিষ্যৎ ফিচার",
+            "ভিডিও জেনারেশন, প্রিভিউ ও এক্সপোর্ট", () -> showTutorialDetail("ভবিষ্যৎ ফিচার",
+            "পরিকল্পিত ধাপ: বিনামূল্যের মডেল/সার্ভিস যাচাই, প্রম্পট লেখা, জেনারেট হওয়া ভিডিওর প্রিভিউ, ডাউনলোড ও এক্সপোর্ট। কোনো ফিচার যুক্ত হয়েছে বলে দেখানো হবে না যতক্ষণ না বাস্তবে তৈরি ও পরীক্ষা করা হয়।"));
+        Button openOrganizer = button("AI ভিডিও অর্গানাইজার খুলুন");
+        page.addView(openOrganizer);
+        openOrganizer.setOnClickListener(v -> showVideoOrganizerPage());
+        Button back = button("← হোমে ফিরে যাও");
+        page.addView(back);
+        back.setOnClickListener(v -> recreate());
+        setContentView(scroll);
+        animateChildren(page);
     }
 
     private void checkForUpdates(boolean showUpToDate) {
