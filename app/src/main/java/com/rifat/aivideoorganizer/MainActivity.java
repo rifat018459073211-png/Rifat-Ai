@@ -116,6 +116,10 @@ public class MainActivity extends Activity {
         page.addView(updateButton);
         updateButton.setOnClickListener(v -> checkForUpdates(true));
 
+        Button historyButton = button("▤ সংরক্ষিত বিশ্লেষণ / History");
+        page.addView(historyButton);
+        historyButton.setOnClickListener(v -> showHistory());
+
         Button choose = button("＋ ভিডিও নির্বাচন করো");
         page.addView(choose);
         choose.setOnClickListener(v -> openVideoPicker());
@@ -663,7 +667,73 @@ public class MainActivity extends Activity {
         animateChildren(panel);
     }
 
+    private void saveHistory(String result) {
+        try {
+            android.content.SharedPreferences prefs = getSharedPreferences("rifat_ai_history", MODE_PRIVATE);
+            JSONArray history = new JSONArray(prefs.getString("items", "[]"));
+            JSONObject item = new JSONObject();
+            item.put("result", result);
+            item.put("category", selectedCategory);
+            item.put("duration", selectedDuration);
+            item.put("video", selectedName == null ? "ভিডিও" : selectedName.getText().toString());
+            item.put("time", System.currentTimeMillis());
+            JSONArray updated = new JSONArray();
+            updated.put(item);
+            for (int i = 0; i < history.length() && i < 19; i++) updated.put(history.getJSONObject(i));
+            prefs.edit().putString("items", updated.toString()).apply();
+        } catch (Exception ignored) {}
+    }
+
+    private void showHistory() {
+        JSONArray history;
+        try {
+            history = new JSONArray(getSharedPreferences("rifat_ai_history", MODE_PRIVATE).getString("items", "[]"));
+        } catch (Exception e) { history = new JSONArray(); }
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(18), dp(22), dp(18), dp(24));
+        panel.setBackgroundColor(Color.rgb(246,248,252));
+        TextView title = label("সংরক্ষিত বিশ্লেষণ", 23);
+        title.setTextColor(Color.rgb(35,75,145));
+        panel.addView(title);
+        if (history.length() == 0) {
+            panel.addView(label("এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।", 15));
+        } else {
+            for (int i = 0; i < history.length(); i++) {
+                JSONObject item = history.optJSONObject(i);
+                if (item == null) continue;
+                String date = new java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.getDefault())
+                    .format(new java.util.Date(item.optLong("time")));
+                Button entry = button(item.optString("category", "ভিডিও") + " • " + date);
+                panel.addView(entry);
+                final String result = item.optString("result", "");
+                final String meta = item.optString("video", "ভিডিও") + "\\n" +
+                    "ক্যাটাগরি: " + item.optString("category", "") + " • দৈর্ঘ্য: " + item.optString("duration", "");
+                entry.setOnClickListener(v -> new AlertDialog.Builder(this)
+                    .setTitle("আগের বিশ্লেষণ")
+                    .setMessage(meta + "\\n\\n" + result)
+                    .setPositiveButton("বন্ধ", null).show());
+            }
+            Button clear = button("History মুছে ফেলো");
+            panel.addView(clear);
+            clear.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("History মুছবে?")
+                .setMessage("সংরক্ষিত বিশ্লেষণগুলো ফোন থেকে মুছে যাবে।")
+                .setNegativeButton("বাতিল", null)
+                .setPositiveButton("মুছে ফেলো", (d,w) -> {
+                    getSharedPreferences("rifat_ai_history", MODE_PRIVATE).edit().clear().apply();
+                    showHistory();
+                }).show());
+        }
+        Button back = button("← ফিরে যাও");
+        panel.addView(back);
+        back.setOnClickListener(v -> recreate());
+        setContentView(panel);
+        animateChildren(panel);
+    }
+
     private void showResult(String result) {
+        saveHistory(result);
         ScrollView scroll = new ScrollView(this);
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
