@@ -151,53 +151,45 @@ public class VideoTrimmerActivity extends Activity {
         exportButton.setEnabled(false);
         progress.setVisibility(android.view.View.VISIBLE);
         statusLabel.setText("ভিডিও প্রসেস হচ্ছে। ভিডিওর দৈর্ঘ্য ও ফোনের ক্ষমতা অনুযায়ী সময় লাগতে পারে…");
-        io.execute(() -> {
-            try {
-                File dir = new File(getCacheDir(), "video_exports");
-                if (!dir.exists() && !dir.mkdirs()) throw new Exception("Export ফোল্ডার তৈরি করা যায়নি।");
-                exportedFile = new File(dir, "Rifat-Ai-clip-" + System.currentTimeMillis() + ".mp4");
-                MediaItem item = new MediaItem.Builder()
-                    .setUri(sourceUri)
-                    .setClippingConfiguration(new MediaItem.ClippingConfiguration.Builder()
-                        .setStartPositionMs(startMs)
-                        .setEndPositionMs(endMs)
-                        .build())
-                    .build();
-                EditedMediaItem edited = new EditedMediaItem.Builder(item).build();
-                transformer = new Transformer.Builder(this)
-                    .addListener(new Transformer.Listener() {
-                        @Override public void onCompleted(Composition composition, ExportResult result) {
-                            runOnUiThread(() -> {
-                                progress.setVisibility(android.view.View.GONE);
-                                statusLabel.setText("ভিডিও তৈরি হয়েছে। এখন MP4 সেভ করার জায়গা বেছে নাও।");
-                                Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-                                save.addCategory(Intent.CATEGORY_OPENABLE);
-                                save.setType("video/mp4");
-                                save.putExtra(Intent.EXTRA_TITLE, "Rifat-Ai-clip.mp4");
-                                startActivityForResult(save, SAVE_VIDEO);
-                            });
-                        }
+        try {
+            File dir = new File(getCacheDir(), "video_exports");
+            if (!dir.exists() && !dir.mkdirs()) throw new Exception("Export ফোল্ডার তৈরি করা যায়নি।");
+            exportedFile = new File(dir, "Rifat-Ai-clip-" + System.currentTimeMillis() + ".mp4");
+            MediaItem item = new MediaItem.Builder()
+                .setUri(sourceUri)
+                .setClippingConfiguration(new MediaItem.ClippingConfiguration.Builder()
+                    .setStartPositionMs(startMs)
+                    .setEndPositionMs(endMs)
+                    .build())
+                .build();
+            EditedMediaItem edited = new EditedMediaItem.Builder(item).build();
+            transformer = new Transformer.Builder(this)
+                .addListener(new Transformer.Listener() {
+                    @Override public void onCompleted(Composition composition, ExportResult result) {
+                        progress.setVisibility(android.view.View.GONE);
+                        statusLabel.setText("ভিডিও তৈরি হয়েছে। এখন MP4 সেভ করার জায়গা বেছে নাও।");
+                        Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                        save.addCategory(Intent.CATEGORY_OPENABLE);
+                        save.setType("video/mp4");
+                        save.putExtra(Intent.EXTRA_TITLE, "Rifat-Ai-clip.mp4");
+                        startActivityForResult(save, SAVE_VIDEO);
+                    }
 
-                        @Override public void onError(Composition composition, ExportResult result, ExportException error) {
-                            runOnUiThread(() -> {
-                                progress.setVisibility(android.view.View.GONE);
-                                exportButton.setEnabled(true);
-                                statusLabel.setText("ভিডিও Export হয়নি: " + (error.getMessage() == null ? "এই ভিডিও ফরম্যাটটি ফোনে সমর্থিত নয়।" : error.getMessage()));
-                                if (exportedFile != null) exportedFile.delete();
-                            });
-                        }
-                    })
-                    .build();
-                transformer.start(edited, exportedFile.getAbsolutePath());
-            } catch (Exception e) {
-                runOnUiThread(() -> {
-                    progress.setVisibility(android.view.View.GONE);
-                    exportButton.setEnabled(true);
-                    statusLabel.setText("Export শুরু করা যায়নি: " + (e.getMessage() == null ? "অজানা সমস্যা" : e.getMessage()));
-                    if (exportedFile != null) exportedFile.delete();
-                });
-            }
-        });
+                    @Override public void onError(Composition composition, ExportResult result, ExportException error) {
+                        progress.setVisibility(android.view.View.GONE);
+                        exportButton.setEnabled(true);
+                        statusLabel.setText("ভিডিও Export হয়নি: " + (error.getMessage() == null ? "এই ভিডিও ফরম্যাটটি ফোনে সমর্থিত নয়।" : error.getMessage()));
+                        if (exportedFile != null) exportedFile.delete();
+                    }
+                })
+                .build();
+            transformer.start(edited, exportedFile.getAbsolutePath());
+        } catch (Exception e) {
+            progress.setVisibility(android.view.View.GONE);
+            exportButton.setEnabled(true);
+            statusLabel.setText("Export শুরু করা যায়নি: " + (e.getMessage() == null ? "অজানা সমস্যা" : e.getMessage()));
+            if (exportedFile != null) exportedFile.delete();
+        }
     }
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
