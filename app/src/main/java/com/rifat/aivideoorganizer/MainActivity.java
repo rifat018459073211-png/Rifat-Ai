@@ -103,36 +103,43 @@ public class MainActivity extends Activity {
         ScrollView dashboardScroll = new ScrollView(this);
         LinearLayout dashboard = new LinearLayout(this);
         dashboard.setOrientation(LinearLayout.VERTICAL);
-        dashboard.setPadding(dp(18), dp(24), dp(18), dp(28));
+        dashboard.setPadding(dp(16), dp(22), dp(16), dp(28));
         dashboard.setBackgroundColor(Color.rgb(246,248,252));
         dashboardScroll.addView(dashboard);
 
         TextView title = label("Rifat-Ai", 29);
-        title.setTextColor(Color.rgb(35,75,145));
+        title.setTextColor(Color.rgb(28,66,124));
         title.setGravity(Gravity.CENTER);
         dashboard.addView(title);
-        TextView intro = label("তোমার ভিডিও, AI টুল ও শেখার সবকিছু এক জায়গায়।", 15);
+        TextView intro = label("Create • Learn • Organize", 13);
+        intro.setTextColor(Color.rgb(105,116,133));
         intro.setGravity(Gravity.CENTER);
-        intro.setPadding(0, dp(8), 0, dp(22));
+        intro.setPadding(0, dp(4), 0, dp(20));
         dashboard.addView(intro);
 
         TextView section = label("তোমার ওয়ার্কস্পেস", 19);
-        section.setPadding(0, dp(4), 0, dp(10));
+        section.setPadding(dp(2), 0, 0, dp(10));
         dashboard.addView(section);
-        addDashboardCard(dashboard, "🎞️  AI ভিডিও অর্গানাইজার",
-            "ভিডিও বেছে নিয়ে AI দিয়ে সেরা মুহূর্ত বিশ্লেষণ করো", () -> showVideoOrganizerPage());
-        addDashboardCard(dashboard, "📚  টিউটোরিয়াল ও শেখার কেন্দ্র",
-            "ভিডিও এডিটিং, AI বিশ্লেষণ ও অ্যাপ ব্যবহারের গাইড পড়ো", () -> showLearningCenter());
-        addDashboardCard(dashboard, "✨  ভিডিও জেনারেটর",
-            "AI দিয়ে নতুন ভিডিও তৈরির ফিচার ও পরিকল্পনা দেখো", () -> showVideoGeneratorPage());
-        addDashboardCard(dashboard, "▤  সংরক্ষিত বিশ্লেষণ",
-            "আগের AI বিশ্লেষণগুলো দেখো ও পরিচালনা করো", () -> showHistory());
-        addDashboardCard(dashboard, "🔄  অ্যাপ আপডেট",
-            "সর্বশেষ সংস্করণ আছে কি না পরীক্ষা করো", () -> checkForUpdates(true));
-
-        TextView footer = label("Rifat-Ai • বিনামূল্যের টুল ও শেখার জায়গা", 12);
+        addFeatureGrid(dashboard,
+            new String[]{"AI ভিডিও অর্গানাইজার","টিউটোরিয়াল ও শেখা","ভিডিও জেনারেটর","সংরক্ষিত বিশ্লেষণ"},
+            new String[]{"ভিডিও বিশ্লেষণ ও সেরা মুহূর্ত খুঁজে নাও","ভিডিও ও AI ব্যবহারের গাইড শিখো","নিজের ভিডিও তৈরির টুল দেখো","আগের বিশ্লেষণ আবার দেখো"},
+            new int[]{0,1,2,3},
+            new Runnable[]{() -> showVideoOrganizerPage(), () -> showLearningCenter(), () -> showVideoGeneratorPage(), () -> showHistory()});
+        Button tutorialVideo = greenButton("▶  ভিডিও টিউটোরিয়াল");
+        LinearLayout.LayoutParams greenParams = new LinearLayout.LayoutParams(-1, dp(54));
+        greenParams.topMargin = dp(10);
+        dashboard.addView(tutorialVideo, greenParams);
+        tutorialVideo.setOnClickListener(v -> showVideoTutorials());
+        Button create = greenButton("＋  CREATE VIDEO");
+        LinearLayout.LayoutParams createParams = new LinearLayout.LayoutParams(-1, dp(56));
+        createParams.topMargin = dp(10);
+        dashboard.addView(create, createParams);
+        create.setOnClickListener(v -> showCreateVideoPage());
+        addDashboardCard(dashboard, "অ্যাপ আপডেট", "সর্বশেষ সংস্করণ পরীক্ষা করো", () -> checkForUpdates(true));
+        TextView footer = label("Rifat-Ai • Free workspace", 12);
+        footer.setTextColor(Color.rgb(125,132,145));
         footer.setGravity(Gravity.CENTER);
-        footer.setPadding(0, dp(20), 0, 0);
+        footer.setPadding(0, dp(18), 0, 0);
         dashboard.addView(footer);
 
         mainContent = dashboardScroll;
@@ -145,29 +152,203 @@ public class MainActivity extends Activity {
         checkForUpdates(false);
     }
 
+    private Button greenButton(String text) {
+        Button b = button(text);
+        b.setTextColor(Color.WHITE);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        b.setAllCaps(false);
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(Color.rgb(25, 155, 91));
+        bg.setCornerRadius(dp(14));
+        b.setBackground(bg);
+        if (Build.VERSION.SDK_INT >= 21) b.setElevation(dp(3));
+        return b;
+    }
+
+    private void addFeatureGrid(LinearLayout parent, String[] titles, String[] details, int[] art, Runnable[] actions) {
+        for (int i = 0; i < titles.length; i += 2) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            for (int col = 0; col < 2 && i + col < titles.length; col++) {
+                final int index = i + col;
+                LinearLayout card = new LinearLayout(this);
+                card.setOrientation(LinearLayout.VERTICAL);
+                card.setBackground(roundBackground(Color.WHITE, Color.rgb(226,232,241), 16));
+                card.setClipToOutline(true);
+                card.setElevation(dp(2));
+                FeatureArtView artwork = new FeatureArtView(this, art[index]);
+                card.addView(artwork, new LinearLayout.LayoutParams(-1, dp(112)));
+                TextView heading = label(titles[index], 15);
+                heading.setTextColor(Color.rgb(35,66,112));
+                heading.setPadding(dp(11), dp(10), dp(9), 0);
+                TextView detail = label(details[index], 12);
+                detail.setTextColor(Color.rgb(105,113,127));
+                detail.setPadding(dp(11), dp(5), dp(9), dp(12));
+                card.addView(heading);
+                card.addView(detail);
+                card.setClickable(true);
+                card.setFocusable(true);
+                card.setOnClickListener(v -> actions[index].run());
+                LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(0, -2, 1f);
+                cp.setMargins(dp(4), dp(4), dp(4), dp(10));
+                row.addView(card, cp);
+            }
+            parent.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        }
+    }
+
+    private android.graphics.drawable.GradientDrawable roundBackground(int fill, int stroke, int radius) {
+        android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
+        d.setColor(fill);
+        d.setCornerRadius(dp(radius));
+        d.setStroke(dp(1), stroke);
+        return d;
+    }
+
     private void addDashboardCard(LinearLayout parent, String title, String description, Runnable action) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(16), dp(15), dp(16), dp(15));
-        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
-        shape.setColor(Color.WHITE);
-        shape.setCornerRadius(dp(16));
-        shape.setStroke(dp(1), Color.rgb(225, 231, 241));
-        card.setBackground(shape);
-        card.setElevation(dp(2));
-        TextView heading = label(title, 17);
+        card.setPadding(dp(15), dp(13), dp(15), dp(13));
+        card.setBackground(roundBackground(Color.WHITE, Color.rgb(225,231,241), 14));
+        TextView heading = label(title, 15);
         heading.setTextColor(Color.rgb(35,75,145));
-        TextView detail = label(description, 13);
+        TextView detail = label(description, 12);
         detail.setTextColor(Color.rgb(85,92,105));
-        detail.setPadding(0, dp(6), 0, 0);
+        detail.setPadding(0, dp(4), 0, 0);
         card.addView(heading);
         card.addView(detail);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.bottomMargin = dp(12);
+        params.topMargin = dp(8);
         parent.addView(card, params);
         card.setClickable(true);
-        card.setFocusable(true);
         card.setOnClickListener(v -> action.run());
+    }
+
+    private void showCreateVideoPage() {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(16), dp(22), dp(16), dp(28));
+        page.setBackgroundColor(Color.rgb(246,248,252));
+        scroll.addView(page);
+        TextView title = label("Create Video", 25);
+        title.setTextColor(Color.rgb(28,66,124));
+        page.addView(title);
+        TextView subtitle = label("তোমার প্রয়োজন অনুযায়ী একটি পদ্ধতি বেছে নাও।", 14);
+        subtitle.setTextColor(Color.rgb(100,110,125));
+        subtitle.setPadding(0, dp(6), 0, dp(14));
+        page.addView(subtitle);
+        addFeatureGrid(page,
+            new String[]{"Text to Video","Image to Video","Video to Video","Ready-made Videos"},
+            new String[]{"লেখা থেকে ভিডিও তৈরির পদ্ধতি","ছবি থেকে চলমান দৃশ্য","নিজের ভিডিও রূপান্তর","ডেমো ও নমুনা ভিডিও"},
+            new int[]{4,5,6,7},
+            new Runnable[]{() -> showGeneratorInfo("Text to Video","একটি দৃশ্য, বিষয়, পরিবেশ, ক্যামেরার গতি ও ভিডিওর ধরন লিখে AI-কে নির্দেশ দেওয়া হয়। Rifat-Ai-তে বাস্তব জেনারেশন ইঞ্জিন এখনো যুক্ত হয়নি।"),
+                () -> showGeneratorInfo("Image to Video","একটি ছবি বেছে নিয়ে কোন অংশ নড়বে, ক্যামেরা কীভাবে চলবে এবং দৃশ্যের মুড কেমন হবে তা বর্ণনা করা হয়। এই জেনারেশন ইঞ্জিন এখনো যুক্ত হয়নি।"),
+                () -> showGeneratorInfo("Video to Video","নিজের ভিডিওর স্টাইল বা দৃশ্য বদলানোর ধারণা। ভিডিও প্রসেসিং মডেল যুক্ত হলে এই অপশন চালু হবে।"),
+                () -> showReadyMadeVideoLibrary()});
+        Button tutorial = greenButton("▶  ভিডিও টিউটোরিয়াল");
+        page.addView(tutorial, new LinearLayout.LayoutParams(-1, dp(52)));
+        tutorial.setOnClickListener(v -> showVideoTutorials());
+        Button back = button("←  হোমে ফিরে যাও");
+        page.addView(back);
+        back.setOnClickListener(v -> recreate());
+        setContentView(scroll);
+        animateChildren(page);
+    }
+
+    private void showGeneratorInfo(String titleText, String description) {
+        new AlertDialog.Builder(this).setTitle(titleText).setMessage(description)
+            .setPositiveButton("ঠিক আছে", null).show();
+    }
+
+    private void showVideoTutorials() {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(18), dp(22), dp(18), dp(26));
+        page.setBackgroundColor(Color.rgb(246,248,252));
+        scroll.addView(page);
+        TextView title = label("ভিডিও টিউটোরিয়াল", 24);
+        title.setTextColor(Color.rgb(28,66,124));
+        page.addView(title);
+        TextView note = label("এখানে Rifat-Ai ব্যবহারের ভিডিও শেখার বিষয়গুলো সাজানো হয়েছে। ভিডিও ফাইল/লিংক যোগ না হওয়া পর্যন্ত নিচেরগুলো লিখিত গাইড হিসেবে থাকবে।", 13);
+        note.setTextColor(Color.rgb(105,113,127));
+        note.setPadding(0, dp(8), 0, dp(14));
+        page.addView(note);
+        String[] names = {"অ্যাপ পরিচিতি","ভিডিও নির্বাচন","AI বিশ্লেষণ","ক্যাটাগরি ও সময়","History ব্যবহার","নিরাপত্তা ও Token","APK আপডেট"};
+        String[] bodies = {"Rifat-Ai-এর হোম স্ক্রিন ও প্রধান অপশনগুলোর পরিচিতি।","ফোন থেকে ভিডিও নির্বাচন ও প্রিভিউ চালানো।","নমুনা ফ্রেম দিয়ে AI বিশ্লেষণ কীভাবে হয়।","ক্লিপের সময় ও ক্যাটাগরি বেছে নেওয়া।","আগের ফলাফল দেখা ও মুছে ফেলা।","গোপন Token নিরাপদে রাখা।","নতুন APK ডাউনলোড ও ইনস্টল করা।"};
+        for(int i=0;i<names.length;i++){
+            final int k=i;
+            Button item=greenButton("▶  "+names[i]);
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(50));
+            p.bottomMargin=dp(8);
+            page.addView(item,p);
+            item.setOnClickListener(v -> showTutorialDetail(names[k],bodies[k]));
+        }
+        Button back=button("←  ফিরে যাও");
+        page.addView(back);
+        back.setOnClickListener(v -> showCreateVideoPage());
+        setContentView(scroll);
+    }
+
+    private void showReadyMadeVideoLibrary() {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(18), dp(22), dp(18), dp(26));
+        page.setBackgroundColor(Color.rgb(246,248,252));
+        scroll.addView(page);
+        TextView title = label("Ready-made Video Demos", 23);
+        title.setTextColor(Color.rgb(28,66,124));
+        page.addView(title);
+        TextView note = label("এখানে ৫০টি ডেমো ভিডিওর ধারণা/প্রম্পট সাজানো হয়েছে। এগুলো এখনো প্লে করা যায় এমন AI-তৈরি ভিডিও ফাইল নয়; বাস্তব ভিডিও দেখাতে লাইসেন্সসম্মত ভিডিও ফাইল বা প্রকাশ্য ভিডিও লিংক যোগ করতে হবে।", 13);
+        note.setTextColor(Color.rgb(105,113,127));
+        note.setPadding(0, dp(8), 0, dp(12));
+        page.addView(note);
+        String[] themes = {"সূর্যোদয়ের ড্রোন দৃশ্য","বৃষ্টিভেজা শহর","সমুদ্রের ঢেউ","পাহাড়ি রাস্তা","রাতের আকাশ","ফুলের বাগান","বরফে ঢাকা বন","মরুভূমির সূর্যাস্ত","নদীর ওপর সেতু","মেঘের ভেলা","কফি তৈরির দৃশ্য","রান্নার ক্লোজআপ","শহরের টাইমল্যাপস","ট্রেনের জানালা","সমুদ্রতীরের হাঁটা","বনের ঝরনা","রঙিন প্রজাপতি","মহাকাশের কল্পদৃশ্য","রোবটের ভবিষ্যৎ শহর","কার্টুন চরিত্রের যাত্রা","সাইকেল রাইড","ফুটবল মাঠ","ক্রিকেট স্টেডিয়াম","স্কেটবোর্ড দৃশ্য","নিয়ন আলোয় রাস্তা","পুরোনো গ্রামের সকাল","ধানক্ষেতের বাতাস","নৌকার ভ্রমণ","জলপ্রপাত","আগ্নেয়গিরির দূর দৃশ্য","রাতের শহরের আলো","ক্যামেরা প্যান শট","স্লো মোশন বৃষ্টি","পাতার ওপর শিশির","মোমবাতির আলো","কাগজের অ্যানিমেশন","3D জ্যামিতিক আকৃতি","অ্যাবস্ট্রাক্ট তরঙ্গ","ফ্যান্টাসি দুর্গ","জাদুকরী বন","মেঘের ওপর দ্বীপ","রঙিন কাচের প্রতিফলন","বইয়ের পাতা ওল্টানো","পেন্সিল আঁকার টাইমল্যাপস","ফ্যাশন প্রোডাক্ট শট","জুতার বিজ্ঞাপনধর্মী দৃশ্য","মোবাইল ফোনের প্রোডাক্ট শট","গেমিং সেটআপ","ফায়ারওয়ার্কস দূর থেকে","শীতের কুয়াশাচ্ছন্ন সকাল"};
+        for(int i=0;i<themes.length;i++){
+            final String theme=themes[i];
+            LinearLayout item=new LinearLayout(this);
+            item.setOrientation(LinearLayout.VERTICAL);
+            item.setPadding(dp(13),dp(11),dp(13),dp(11));
+            item.setBackground(roundBackground(Color.WHITE,Color.rgb(225,231,241),12));
+            TextView n=label(String.format(java.util.Locale.getDefault(),"%02d  %s",i+1,theme),14);
+            n.setTextColor(Color.rgb(35,66,112));
+            TextView d=label("ডেমো প্রম্পট আইডিয়া • ভিডিও ফাইল এখনো সংযুক্ত নয়",11);
+            d.setTextColor(Color.rgb(115,122,134));
+            item.addView(n); item.addView(d);
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);
+            p.bottomMargin=dp(7);
+            page.addView(item,p);
+            item.setOnClickListener(v -> showGeneratorInfo(theme,"ডেমো আইডিয়া: "+theme+"। এটি এখনো প্লে করা যায় এমন ভিডিও নয়; ভিডিও জেনারেটর ইঞ্জিন যুক্ত হলে এই প্রম্পট ব্যবহার করা যাবে।"));
+        }
+        Button back=button("←  Create Video-তে ফিরে যাও");
+        page.addView(back);
+        back.setOnClickListener(v -> showCreateVideoPage());
+        setContentView(scroll);
+    }
+
+    private class FeatureArtView extends View {
+        private final int type;
+        private final android.graphics.Paint paint = new android.graphics.Paint(3);
+        FeatureArtView(android.content.Context c, int t) { super(c); type=t; setLayerType(View.LAYER_TYPE_SOFTWARE,null); }
+        @Override protected void onDraw(android.graphics.Canvas canvas) {
+            super.onDraw(canvas);
+            int[][] palettes={{0xffdcecff,0xff8eb8ed},{0xffd9f4e7,0xff80cba5},{0xffffe8d6,0xffffb27b},{0xffe8e2ff,0xffaa9be8},
+                {0xffd9eaff,0xff83b5e8},{0xffffe6ef,0xffee9bb9},{0xffe4f0ff,0xff9dbce9},{0xffe1f3ec,0xff91cdb4}};
+            int[] colors=palettes[type%palettes.length];
+            paint.setShader(new android.graphics.LinearGradient(0,0,getWidth(),getHeight(),colors[0],colors[1],android.graphics.Shader.TileMode.CLAMP));
+            canvas.drawRect(0,0,getWidth(),getHeight(),paint);
+            paint.setShader(null);
+            float cx=getWidth()/2f, cy=getHeight()/2f;
+            paint.setColor(0x55ffffff); canvas.drawCircle(cx,cy,dp(43),paint);
+            paint.setColor(0xff294e79); paint.setStyle(android.graphics.Paint.Style.STROKE); paint.setStrokeWidth(dp(3)); paint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+            if(type==0){ canvas.drawRoundRect(cx-dp(28),cy-dp(19),cx+dp(28),cy+dp(19),dp(7),dp(7),paint); canvas.drawCircle(cx,cy,dp(10),paint); canvas.drawRoundRect(cx-dp(13),cy-dp(25),cx+dp(4),cy-dp(19),dp(3),dp(3),paint); }
+            else if(type==1||type==5){ canvas.drawRect(cx-dp(25),cy-dp(23),cx+dp(25),cy+dp(23),paint); canvas.drawCircle(cx+dp(12),cy-dp(10),dp(5),paint); android.graphics.Path path=new android.graphics.Path(); path.moveTo(cx-dp(22),cy+dp(15)); path.lineTo(cx-dp(5),cy-dp(4)); path.lineTo(cx+dp(5),cy+dp(6)); path.lineTo(cx+dp(15),cy-dp(3)); path.lineTo(cx+dp(23),cy+dp(15)); canvas.drawPath(path,paint); }
+            else if(type==2||type==4){ canvas.drawRoundRect(cx-dp(25),cy-dp(18),cx+dp(25),cy+dp(18),dp(6),dp(6),paint); android.graphics.Path p=new android.graphics.Path(); p.moveTo(cx-dp(7),cy-dp(11)); p.lineTo(cx+dp(13),cy); p.lineTo(cx-dp(7),cy+dp(11)); p.close(); paint.setStyle(android.graphics.Paint.Style.FILL); canvas.drawPath(p,paint); paint.setStyle(android.graphics.Paint.Style.STROKE); }
+            else { canvas.drawCircle(cx,cy,dp(23),paint); canvas.drawLine(cx,cy-dp(34),cx,cy+dp(34),paint); canvas.drawLine(cx-dp(34),cy,cx+dp(34),cy,paint); canvas.drawLine(cx-dp(24),cy-dp(24),cx+dp(24),cy+dp(24),paint); }
+            paint.setStyle(android.graphics.Paint.Style.FILL);
+        }
     }
 
     private void showVideoOrganizerPage() {
