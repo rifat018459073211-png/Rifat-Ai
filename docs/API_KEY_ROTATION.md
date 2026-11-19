@@ -1,27 +1,37 @@
-# AI API key handling and quota policy
+# AI API key handling and multi-project credential management
 
 ## Goal
-Keep Gemini credentials out of the Android APK and provide reliable retry handling for the AI Video Organizer.
+Keep Gemini credentials out of the Android APK and provide reliable request handling for the AI Video Organizer. The backend is designed to support up to 24 independently authorized Google AI projects when their use is permitted by Google's current terms and quota rules.
 
 ## Security boundary
-- The Android app must call a small backend endpoint; it must never contain Gemini API keys.
-- Store credentials only as server-side environment secrets.
+- The Android app must call a backend endpoint; it must never contain Gemini API keys.
+- Store credentials only as backend environment secrets or the hosting provider's secret manager.
 - GitHub Actions repository secrets are available to workflows, not to an installed Android app at runtime.
-- Never commit API keys, paste them into source code, or print them in logs.
+- Never commit API keys, paste them into source code, expose them in API responses, or print them in logs.
+- Do not put real credentials in `.env.example`; use placeholder values only.
 
-## Quota-safe request handling
-1. Send a request using the configured Gemini project credential.
-2. On a temporary rate-limit / quota response (HTTP 429), honor `Retry-After` and the provider's reset guidance. Queue or pause the job; do not switch credentials to get around the same project's quota.
-3. On transient server errors (HTTP 5xx or network timeout), retry with bounded exponential backoff and jitter.
-4. On invalid/revoked credentials (HTTP 401/403), stop and report a configuration error. Do not endlessly cycle keys.
-5. On malformed requests or unsupported models (HTTP 400/404), report the error; do not retry unchanged.
-6. Save job state so the user can resume after waiting or app restart.
+## Credential configuration
+The backend configuration may define these secret names:
+- `GEMINI_API_KEY_01` through `GEMINI_API_KEY_24`
+- Each configured value must belong to a separate project that the account owner is authorized to use.
+- The backend must treat each project as a separate quota and billing/security boundary.
+- Missing credentials are skipped; credentials are never returned to the Android client.
+- Keep a server-side project label/index for diagnostics, but never log the secret value.
 
-## Multiple credentials
-Multiple credentials may be configured for operational redundancy only when each credential belongs to an independently authorized project and its use complies with Google's current terms and quota rules. Multiple keys from one project do not create extra quota. This app must not rotate credentials to evade rate limits or account/project quotas.
+## Safe request and failover rules
+1. Use the configured project selected by the backend's permitted workload-routing policy.
+2. A project may be marked temporarily unavailable after a transient network failure or HTTP 5xx. Retry with bounded exponential backoff and jitter; only use another independently authorized project for genuine service-reliability failover where the provider's terms permit it.
+3. On HTTP 429, honor `Retry-After` and the provider's quota/reset guidance. Pause or queue the job for that project. Do not cycle through projects simply to evade rate limits, daily quotas, or usage restrictions.
+4. On HTTP 401/403, mark that credential as needing owner attention and report a configuration/permission error. Do not endlessly cycle through credentials.
+5. On HTTP 400/404, report malformed input, model, or endpoint configuration; do not retry an unchanged request.
+6. Persist job state so the user can resume after waiting or app restart.
+7. Keep per-project request accounting and expose only safe status information (project number/label, state, and retry time) to administrators.
+
+## Important quota note
+Separate projects have separate project-level quota configuration, but creating or using many projects does not grant permission to circumvent provider limits or terms. Do not implement automatic project switching whose purpose is to continue requests after a quota has been exhausted. Use the provider's approved quota increase process or wait for quota reset when required.
 
 ## Planned implementation order
-- Add a backend proxy with server-side secret storage.
+- Add a backend proxy with server-side secret storage and support for up to 24 authorized project configurations.
 - Add a job queue and retry scheduler that respects 429 / Retry-After.
 - Add Android networking to submit jobs and poll status.
 - Add video analysis and clip export after the request pipeline is verified.
