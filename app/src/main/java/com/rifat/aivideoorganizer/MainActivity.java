@@ -988,10 +988,8 @@ public class MainActivity extends Activity {
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(8), dp(4), dp(8), dp(4));
 
-        TextView intro = label("এই স্ক্রিন থেকেই তোমার Cloudflare Worker যুক্ত করবে। GitHub-এ Token বসাতে হবে না।", 13);
-        intro.setPadding(0, 0, 0, dp(10));
+        TextView intro = label("Worker URL ও APP_ACCESS_TOKEN এখানে দাও। সংযোগ সফল হলে বিস্তারিত Status পেজ খুলবে।", 13);
         form.addView(intro);
-
         EditText endpoint = new EditText(this);
         endpoint.setSingleLine(true);
         endpoint.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
@@ -1011,10 +1009,7 @@ public class MainActivity extends Activity {
             : "Cloudflare-এ তৈরি করা APP_ACCESS_TOKEN এখানে দাও");
         form.addView(token);
 
-        TextView note = label(
-            "১. Worker URL বসাও। ২. APP_ACCESS_TOKEN প্রথমবার দাও। ৩. Connect ও Test চাপো। " +
-            "Token ফোনে Android Keystore দিয়ে এনক্রিপ্ট করে রাখা হবে। Gemini API Key এখানে নয়—Cloudflare Worker Secrets-এ থাকবে.",
-            12);
+        TextView note = label("Token ফোনে Android Keystore দিয়ে এনক্রিপ্ট করে রাখা হবে। Gemini API Key এখানে নয়—Cloudflare Worker Secrets-এ থাকবে।", 12);
         note.setPadding(0, dp(10), 0, 0);
         form.addView(note);
 
@@ -1065,21 +1060,25 @@ public class MainActivity extends Activity {
                     String authBody = readStream(as >= 200 && as < 300 ? auth.getInputStream() : auth.getErrorStream());
                     if (as == 401) throw new Exception("APP_ACCESS_TOKEN ভুল। Cloudflare Worker Secret মিলিয়ে দেখো।");
                     if (as != 400 || !authBody.contains("contents array")) {
-                        throw new Exception("Worker token যাচাই হয়নি (HTTP " + as + "): " + authBody);
+                        throw new Exception("Worker token যাচাই হয়নি (HTTP " + as + ")");
                     }
 
                     if (!enteredToken.isEmpty()) saveToken(enteredToken);
                     getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(WORKER_URL_KEY, base).apply();
-                    int projects = healthJson.optInt("configuredProjects", 0);
                     runOnUiThread(() -> {
-                        Toast.makeText(this, "Cloudflare Connected • Gemini projects: " + projects, Toast.LENGTH_LONG).show();
                         dialog.dismiss();
+                        new AlertDialog.Builder(this)
+                            .setTitle("✓ সংযোগ সফল হয়েছে")
+                            .setMessage("Cloudflare Worker অনলাইন এবং APP_ACCESS_TOKEN গ্রহণ করেছে। এখন বিস্তারিত সংযোগের অবস্থা দেখা যাবে।")
+                            .setCancelable(false)
+                            .setPositiveButton("ঠিক আছে", (d, w) -> showCloudflareStatusPage())
+                            .show();
                     });
                 } catch (Exception e) {
                     String message = safeMessage(e);
                     runOnUiThread(() -> {
                         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
-                        new AlertDialog.Builder(this).setTitle("সংযোগ হয়নি").setMessage(message)
+                        new AlertDialog.Builder(this).setTitle("সংযোগ সফল হয়নি").setMessage(message)
                             .setPositiveButton("ঠিক আছে", null).show();
                     });
                 } finally {
@@ -1089,6 +1088,127 @@ public class MainActivity extends Activity {
             });
         }));
         dialog.show();
+    }
+
+    private void showCloudflareStatusPage() {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(18), dp(22), dp(18), dp(28));
+        page.setBackgroundColor(Color.rgb(246,248,252));
+        scroll.addView(page);
+
+        TextView title = label("Cloudflare সংযোগের অবস্থা", 23);
+        title.setTextColor(Color.rgb(28,66,124));
+        page.addView(title);
+        TextView subtitle = label("লাইভ পরীক্ষা করে নিচের তথ্য দেখানো হচ্ছে।", 13);
+        subtitle.setTextColor(Color.rgb(105,116,133));
+        subtitle.setPadding(0, dp(5), 0, dp(14));
+        page.addView(subtitle);
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(16), dp(14), dp(16), dp(14));
+        card.setBackground(roundBackground(Color.WHITE, Color.rgb(226,232,241), 16));
+        page.addView(card);
+
+        TextView overall = label("⏳ সংযোগ পরীক্ষা হচ্ছে…", 18);
+        overall.setTextColor(Color.rgb(35,75,145));
+        card.addView(overall);
+        TextView details = label("Worker, Token এবং Backend-এর তথ্য আনা হচ্ছে।", 14);
+        details.setPadding(0, dp(10), 0, 0);
+        card.addView(details);
+
+        Button refresh = greenButton("আবার পরীক্ষা করো");
+        page.addView(refresh);
+        Button setup = button("Worker URL / Token পরিবর্তন");
+        page.addView(setup);
+        Button back = button("হোমে ফিরে যাও");
+        page.addView(back);
+        back.setOnClickListener(v -> recreate());
+        setup.setOnClickListener(v -> showCloudflareConnection());
+
+        Runnable[] check = new Runnable[1];
+        check[0] = () -> {
+            refresh.setEnabled(false);
+            overall.setText("⏳ সংযোগ পরীক্ষা হচ্ছে…");
+            details.setText("Cloudflare Worker ও Token যাচাই করা হচ্ছে।");
+            String base = getWorkerBaseUrl();
+            String access = readStoredToken();
+            executor.execute(() -> {
+                HttpURLConnection health = null;
+                HttpURLConnection auth = null;
+                try {
+                    health = (HttpURLConnection) new URL(base + "/health").openConnection();
+                    health.setConnectTimeout(12000);
+                    health.setReadTimeout(15000);
+                    int hs = health.getResponseCode();
+                    String body = readStream(hs >= 200 && hs < 300 ? health.getInputStream() : health.getErrorStream());
+                    if (hs < 200 || hs >= 300) throw new Exception("Worker offline / HTTP " + hs);
+                    JSONObject info = new JSONObject(body);
+                    if (!info.optBoolean("ok", false)) throw new Exception("Worker health check failed");
+
+                    boolean tokenOk = false;
+                    String tokenStatus = access == null ? "ফোনে Token সংরক্ষিত নেই" : "Token পরীক্ষা হচ্ছে";
+                    if (access != null) {
+                        auth = (HttpURLConnection) new URL(base + "/v1/generate").openConnection();
+                        auth.setRequestMethod("POST");
+                        auth.setConnectTimeout(12000);
+                        auth.setReadTimeout(15000);
+                        auth.setDoOutput(true);
+                        auth.setRequestProperty("Content-Type", "application/json");
+                        auth.setRequestProperty("Authorization", "Bearer " + access);
+                        byte[] probe = "{}".getBytes(StandardCharsets.UTF_8);
+                        auth.setFixedLengthStreamingMode(probe.length);
+                        try (OutputStream out = auth.getOutputStream()) { out.write(probe); }
+                        int code = auth.getResponseCode();
+                        String response = readStream(code >= 200 && code < 300 ? auth.getInputStream() : auth.getErrorStream());
+                        tokenOk = code == 400 && response.contains("contents array");
+                        tokenStatus = tokenOk ? "সফল — Worker Token গ্রহণ করেছে" :
+                            (code == 401 ? "ব্যর্থ — Token মেলেনি" : "যাচাই সম্পূর্ণ হয়নি (HTTP " + code + ")");
+                    }
+
+                    final boolean verified = tokenOk;
+                    final String tokenLine = tokenStatus;
+                    final int projects = info.optInt("configuredProjects", 0);
+                    final String model = info.optString("model", "তথ্য নেই");
+                    final int maxBytes = info.optInt("maxRequestBytes", 0);
+                    final String projectList = info.optString("configuredProjectIndexes", "");
+                    runOnUiThread(() -> {
+                        overall.setText(verified ? "✓ Cloudflare সংযুক্ত" : "⚠ Worker পাওয়া গেছে, Token যাচাই হয়নি");
+                        overall.setTextColor(verified ? Color.rgb(25,145,82) : Color.rgb(190,120,20));
+                        String report =
+                            "Worker status: Online (HTTP 200)\n" +
+                            "Worker URL: " + base + "\n\n" +
+                            "APP_ACCESS_TOKEN: " + tokenLine + "\n" +
+                            "ফোনে Token: " + (access == null ? "সংরক্ষিত নেই" : "Android Keystore দিয়ে এনক্রিপ্ট করে সংরক্ষিত") + "\n\n" +
+                            "Gemini API: " + (projects > 0 ? projects + "টি Secret key পাওয়া গেছে" : "কোনো Secret key পাওয়া যায়নি") + "\n" +
+                            "Configured key slots: " + (projectList.isEmpty() ? "কোনোটি নয়" : projectList) + "\n" +
+                            "Gemini model: " + model + "\n" +
+                            "প্রতি request body limit (Worker): " + (maxBytes > 0 ? (maxBytes / 1024) + " KB" : "তথ্য নেই") + "\n\n" +
+                            "Cloudflare Workers plan usage / বাকি quota: এই Worker endpoint থেকে দেখা যায় না। Cloudflare Dashboard → Workers & Pages → Usage-এ প্রকৃত usage ও limit দেখবে।\n" +
+                            "Gemini key-এর আসল validity ও quota AI request চালালে provider response থেকে বোঝা যাবে; শুধু Secret থাকা মানেই key valid নয়।";
+                        details.setText(report);
+                        refresh.setEnabled(true);
+                    });
+                } catch (Exception e) {
+                    String message = safeMessage(e);
+                    runOnUiThread(() -> {
+                        overall.setText("✕ Cloudflare সংযোগ নেই");
+                        overall.setTextColor(Color.rgb(190,55,55));
+                        details.setText("Worker URL: " + base + "\n\nপরীক্ষার ফল: " + message +
+                            "\n\nCloudflare Worker deploy করা আছে কিনা এবং URL সঠিক কিনা পরীক্ষা করো।");
+                        refresh.setEnabled(true);
+                    });
+                } finally {
+                    if (health != null) health.disconnect();
+                    if (auth != null) auth.disconnect();
+                }
+            });
+        };
+        refresh.setOnClickListener(v -> check[0].run());
+        setContentView(scroll);
+        check[0].run();
     }
 
     private void showTokenDialog() {
