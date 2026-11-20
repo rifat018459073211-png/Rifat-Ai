@@ -138,8 +138,9 @@ public class MainActivity extends Activity {
         mainContent = dashboardScroll;
         rootLayout = new FrameLayout(this);
         rootLayout.addView(dashboardScroll, new FrameLayout.LayoutParams(-1, -1));
-        startupGate = buildCheckingScreen();
-        rootLayout.addView(startupGate, new FrameLayout.LayoutParams(-1, -1));
+        // Keep the dashboard usable immediately. Network/update checks must never
+        // cover the app or block local tools when GitHub is unreachable.
+        startupGate = null;
         setContentView(rootLayout);
         animateChildren(dashboard);
         checkForUpdates(false);
