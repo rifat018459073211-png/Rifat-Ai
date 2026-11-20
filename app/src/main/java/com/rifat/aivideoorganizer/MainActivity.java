@@ -1101,7 +1101,7 @@ public class MainActivity extends Activity {
         TextView title = label("Cloudflare সংযোগের অবস্থা", 23);
         title.setTextColor(Color.rgb(28,66,124));
         page.addView(title);
-        TextView subtitle = label("লাইভ পরীক্ষা করে নিচের তথ্য দেখানো হচ্ছে।", 13);
+        TextView subtitle = label("লাইভ পরীক্ষা: Worker, Token, Gemini কনফিগারেশন ও request limit।", 13);
         subtitle.setTextColor(Color.rgb(105,116,133));
         subtitle.setPadding(0, dp(5), 0, dp(14));
         page.addView(subtitle);
