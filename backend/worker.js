@@ -23,6 +23,20 @@ function getConfiguredProjects(env) {
     .filter((entry) => typeof entry.key === "string" && entry.key.trim().length > 0);
 }
 
+function providerErrorMessage(response) {
+  return response.clone().text().then((raw) => {
+    try {
+      const parsed = JSON.parse(raw);
+      const message = parsed && parsed.error && typeof parsed.error.message === "string"
+        ? parsed.error.message.trim()
+        : "";
+      return message.slice(0, 300);
+    } catch {
+      return "";
+    }
+  }).catch(() => "");
+}
+
 function safeErrorMessage(status) {
   if (status === 400) return "Gemini rejected the request. Check the request body.";
   if (status === 401 || status === 403) return "A configured project credential is invalid or lacks permission.";
@@ -153,10 +167,12 @@ export default {
       }
 
       if ([400, 401, 403, 404].includes(response.status)) {
+        const providerMessage = await providerErrorMessage(response);
         return json({
           error: safeErrorMessage(response.status),
           status: response.status,
-          project: project.index
+          project: project.index,
+          ...(providerMessage ? { providerMessage } : {})
         }, response.status, cors);
       }
 
