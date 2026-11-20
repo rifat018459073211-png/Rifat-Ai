@@ -567,7 +567,7 @@ public class MainActivity extends Activity {
 
         RadioGroup durations = new RadioGroup(this);
         durations.setOrientation(RadioGroup.VERTICAL);
-        String[] options = {"AI নিজে নির্বাচন করবে","৫ সেকেন্ড","১০ সেকেন্ড","২০ সেকেন্ড","৩০ সেকেন্ড","২ মিনিট","৩ মিনিট","১০ মিনিট","২৫ মিনিট","নিজের সময় লিখব"};
+        String[] options = {"AI নিজে নির্বাচন করবে","৫ সেকেন্ড","১০ সেকেন্ড","২০ সেকেন্ড","৩০ সেকেন্ড","১ মিনিট","২ মিনিট","৩ মিনিট","১০ মিনিট","২৫ মিনিট","নিজের সময় লিখব"};
         int aiId = View.generateViewId();
         for (String option : options) {
             RadioButton rb = new RadioButton(this);
@@ -1001,16 +1001,6 @@ public class MainActivity extends Activity {
         TextView note = label("Worker URL ও APP_ACCESS_TOKEN দাও। Token ফোনের Android Keystore দিয়ে এনক্রিপ্ট করে রাখা হবে। Gemini API Key এখানে দিতে হবে না—সেগুলো Cloudflare Worker-এর Secret-এ থাকবে।", 12);
         note.setPadding(0, dp(8), 0, 0);
         form.addView(note);
-        new AlertDialog.Builder(this)
-            .setTitle("Cloudflare Backend সংযোগ")
-            .setView(form)
-            .setNegativeButton("বাতিল", null)
-            .setNeutralButton("সংযোগ মুছুন", (dialog, which) -> {
-                getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(TOKEN_KEY).remove(WORKER_URL_KEY).apply();
-                Toast.makeText(this, "Cloudflare সংযোগের তথ্য মুছে দেওয়া হয়েছে।", Toast.LENGTH_LONG).show();
-            })
-            .setPositiveButton("Connect ও Test", null)
-            .create();
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Cloudflare Backend সংযোগ")
             .setView(form)
