@@ -5,6 +5,16 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.media.MediaMetadataRetriever;
+import androidx.media3.common.MediaItem;
+import androidx.media3.transformer.Composition;
+import androidx.media3.transformer.EditedMediaItem;
+import androidx.media3.transformer.ExportException;
+import androidx.media3.transformer.ExportResult;
+import androidx.media3.transformer.Transformer;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.OutputStream;
+import java.io.InputStream;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.view.View;
@@ -30,6 +40,8 @@ public class BestMomentsActivity extends Activity {
     private TextView status;
     private LinearLayout results;
     private Uri videoUri;
+    private File pendingExport;
+    private static final int SAVE_CLIP = 711;
 
     private int dp(int n) { return (int)(n * getResources().getDisplayMetrics().density); }
     private TextView text(String value, int size) {
@@ -71,7 +83,7 @@ public class BestMomentsActivity extends Activity {
         super.onActivityResult(requestCode,resultCode,data);
         if(requestCode != PICK_VIDEO || resultCode != RESULT_OK || data == null || data.getData() == null) return;
         videoUri = data.getData();
-        getContentResolver().takePersistableUriPermission(videoUri,data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION));
+        try { getContentResolver().takePersistableUriPermission(videoUri,data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION)); } catch(Exception ignored) {}
         status.setText("ভিডিও বিশ্লেষণ হচ্ছে…");
         results.removeAllViews();
         worker.execute(() -> analyze(videoUri));
@@ -138,11 +150,106 @@ public class BestMomentsActivity extends Activity {
         for(Moment m:moments) {
             long end=Math.min(duration,m.atMs+8000);
             String line=String.format(Locale.getDefault(),"হাইলাইট %d  •  %s – %s",index++,time(m.atMs),time(end));
-            TextView item=text(line,16); item.setPadding(dp(12),dp(14),dp(12),dp(14));
-            item.setBackgroundColor(Color.WHITE);
-            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(8);results.addView(item,p);
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dp(12),dp(10),dp(12),dp(10));
+            card.setBackgroundColor(Color.WHITE);
+            TextView item=text(line,16);
+            card.addView(item);
+            Button cut = button("এই মুহূর্তের ৮ সেকেন্ডের MP4 ক্লিপ সেভ");
+            card.addView(cut);
+            cut.setOnClickListener(v -> exportMoment(m, cut));
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);
+            p.bottomMargin=dp(8);
+            results.addView(card,p);
         }
     }
+    private void exportMoment(Moment moment, Button action) {
+        if (videoUri == null) {
+            status.setText("ভিডিও আবার নির্বাচন করো।");
+            return;
+        }
+        long startMs = Math.max(0, moment.atMs);
+        long endMs = Math.min(startMs + 8000, Math.max(startMs + 500, getVideoDurationMs()));
+        if (endMs <= startMs) {
+            status.setText("এই মুহূর্তের ক্লিপের সময় নির্ধারণ করা যায়নি।");
+            return;
+        }
+        action.setEnabled(false);
+        status.setText("MP4 ক্লিপ তৈরি হচ্ছে…");
+        try {
+            File folder = new File(getCacheDir(), "best_moments");
+            if (!folder.exists() && !folder.mkdirs()) throw new Exception("ক্লিপ ফোল্ডার তৈরি হয়নি");
+            pendingExport = new File(folder, "Rifat-Ai-highlight-" + System.currentTimeMillis() + ".mp4");
+            MediaItem item = new MediaItem.Builder().setUri(videoUri)
+                .setClippingConfiguration(new MediaItem.ClippingConfiguration.Builder()
+                    .setStartPositionMs(startMs).setEndPositionMs(endMs).build()).build();
+            EditedMediaItem edited = new EditedMediaItem.Builder(item).build();
+            Transformer transformer = new Transformer.Builder(this).addListener(new Transformer.Listener() {
+                @Override public void onCompleted(Composition composition, ExportResult result) {
+                    runOnUiThread(() -> {
+                        status.setText("ক্লিপ তৈরি হয়েছে। কোথায় সেভ করবে বেছে নাও।");
+                        Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                        save.addCategory(Intent.CATEGORY_OPENABLE);
+                        save.setType("video/mp4");
+                        save.putExtra(Intent.EXTRA_TITLE, "Rifat-Ai-highlight.mp4");
+                        startActivityForResult(save, SAVE_CLIP);
+                    });
+                }
+                @Override public void onError(Composition composition, ExportResult result, ExportException error) {
+                    runOnUiThread(() -> {
+                        action.setEnabled(true);
+                        status.setText("ক্লিপ তৈরি হয়নি: " + (error.getMessage() == null ? "ভিডিও ফরম্যাট সমর্থিত নয়" : error.getMessage()));
+                        if (pendingExport != null) pendingExport.delete();
+                    });
+                }
+            }).build();
+            transformer.start(edited, pendingExport.getAbsolutePath());
+        } catch (Exception e) {
+            action.setEnabled(true);
+            status.setText("ক্লিপ Export শুরু হয়নি: " + e.getMessage());
+            if (pendingExport != null) pendingExport.delete();
+        }
+    }
+
+    private long getVideoDurationMs() {
+        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+        try {
+            retriever.setDataSource(this, videoUri);
+            String raw = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+            return raw == null ? 0 : Long.parseLong(raw);
+        } catch (Exception e) {
+            return 0;
+        } finally {
+            try { retriever.release(); } catch (Exception ignored) {}
+        }
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != SAVE_CLIP) return;
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+            if (pendingExport != null) pendingExport.delete();
+            status.setText("ক্লিপ সেভ বাতিল হয়েছে।");
+            return;
+        }
+        Uri destination = data.getData();
+        worker.execute(() -> {
+            try (InputStream in = new FileInputStream(pendingExport);
+                 OutputStream out = getContentResolver().openOutputStream(destination, "w")) {
+                if (out == null) throw new Exception("নির্বাচিত জায়গায় লেখা যায়নি");
+                byte[] buffer = new byte[8192];
+                int count;
+                while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+                out.flush();
+                pendingExport.delete();
+                runOnUiThread(() -> status.setText("সফল! Best Moment MP4 ক্লিপ সেভ হয়েছে।"));
+            } catch (Exception e) {
+                runOnUiThread(() -> status.setText("ক্লিপ সেভ হয়নি: " + e.getMessage()));
+            }
+        });
+    }
+
     private String time(long ms) {
         long sec=ms/1000; return String.format(Locale.getDefault(),"%02d:%02d",sec/60,sec%60);
     }
