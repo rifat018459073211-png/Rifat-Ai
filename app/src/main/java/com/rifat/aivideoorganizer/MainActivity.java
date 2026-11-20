@@ -49,14 +49,16 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
-    private static final String API_URL = "https://rifat-ai.rifat018459073211.workers.dev/v1/generate";
+    private static final String DEFAULT_WORKER_URL = "https://rifat-ai.rifat018459073211.workers.dev";
+    private static final String API_URL = DEFAULT_WORKER_URL + "/v1/generate";
+    private static final String WORKER_URL_KEY = "worker_url";
     private static final String RELEASE_API = "https://api.github.com/repos/rifat018459073211-png/Rifat-Ai/releases/latest";
     private static final String APK_ASSET_NAME = "Rifat-Ai.apk";
     private static final long MAX_APK_BYTES = 100L * 1024L * 1024L;
     private static final String PREFS = "rifat_ai_secure_settings";
     private static final String TOKEN_KEY = "worker_token";
     private static final String KEY_ALIAS = "RifatAiWorkerTokenKey";
-    private static final int FRAME_COUNT = 5;
+    private static final int FRAME_COUNT = 8;
     private static final int MAX_REQUEST_BYTES = 950 * 1024;
 
     private VideoView videoView;
@@ -130,6 +132,7 @@ public class MainActivity extends Activity {
         addDashboardCard(dashboard, "Video to Cartoon", "ভিডিওতে স্থানীয় cartoon filter প্রয়োগ করো", () -> showVideoToVideoPage());
         addDashboardCard(dashboard, "Video to Text / বাংলা Subtitles", "ভিডিওর কথা লিখে TXT ও SRT বানাও", () -> startActivity(new Intent(this, VideoTranscriptActivity.class)));
         addDashboardCard(dashboard, "AI Video Highlights", "লম্বা ভিডিও থেকে Funny ও গুরুত্বপূর্ণ অংশ খুঁজে ক্লিপ তৈরি করো", () -> showVideoOrganizerPage());
+        addDashboardCard(dashboard, "Cloudflare সংযোগ", "তোমার Worker ও Gemini Backend যুক্ত / পরীক্ষা করো", () -> showCloudflareConnection());
         TextView footer = label("Rifat-Ai • Free tools", 12);
         footer.setTextColor(Color.rgb(125,132,145));
         footer.setGravity(Gravity.CENTER);
@@ -966,6 +969,109 @@ public class MainActivity extends Activity {
         });
     }
 
+    private String getWorkerBaseUrl() {
+        String value = getSharedPreferences(PREFS, MODE_PRIVATE).getString(WORKER_URL_KEY, DEFAULT_WORKER_URL);
+        return value == null || value.trim().isEmpty() ? DEFAULT_WORKER_URL : value.trim().replaceAll("/+$", "");
+    }
+
+    private void showCloudflareConnection() {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(8), dp(4), dp(8), dp(4));
+        EditText endpoint = new EditText(this);
+        endpoint.setSingleLine(true);
+        endpoint.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        endpoint.setHint("https://your-worker.workers.dev");
+        endpoint.setText(getWorkerBaseUrl());
+        form.addView(endpoint);
+        EditText token = new EditText(this);
+        token.setSingleLine(true);
+        token.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        token.setHint("Cloudflare APP_ACCESS_TOKEN");
+        form.addView(token);
+        TextView note = label("Worker URL ও APP_ACCESS_TOKEN দাও। Token ফোনের Android Keystore দিয়ে এনক্রিপ্ট করে রাখা হবে। Gemini API Key এখানে দিতে হবে না—সেগুলো Cloudflare Worker-এর Secret-এ থাকবে।", 12);
+        note.setPadding(0, dp(8), 0, 0);
+        form.addView(note);
+        new AlertDialog.Builder(this)
+            .setTitle("Cloudflare Backend সংযোগ")
+            .setView(form)
+            .setNegativeButton("বাতিল", null)
+            .setNeutralButton("সংযোগ মুছুন", (dialog, which) -> {
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(TOKEN_KEY).remove(WORKER_URL_KEY).apply();
+                Toast.makeText(this, "Cloudflare সংযোগের তথ্য মুছে দেওয়া হয়েছে।", Toast.LENGTH_LONG).show();
+            })
+            .setPositiveButton("Connect ও Test", null)
+            .create();
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Cloudflare Backend সংযোগ")
+            .setView(form)
+            .setNegativeButton("বাতিল", null)
+            .setPositiveButton("Connect ও Test", null)
+            .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String base = endpoint.getText().toString().trim().replaceAll("/+$", "");
+            String access = token.getText().toString().trim();
+            if (!base.matches("https://[A-Za-z0-9.-]+(:[0-9]{1,5})?")) {
+                endpoint.setError("সঠিক HTTPS Worker URL লিখো");
+                return;
+            }
+            if (access.isEmpty()) {
+                token.setError("APP_ACCESS_TOKEN দিতে হবে");
+                return;
+            }
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+            Toast.makeText(this, "Cloudflare সংযোগ পরীক্ষা হচ্ছে…", Toast.LENGTH_SHORT).show();
+            executor.execute(() -> {
+                HttpURLConnection health = null;
+                HttpURLConnection auth = null;
+                try {
+                    health = (HttpURLConnection) new URL(base + "/health").openConnection();
+                    health.setConnectTimeout(12000);
+                    health.setReadTimeout(15000);
+                    int hs = health.getResponseCode();
+                    String healthBody = readStream(hs >= 200 && hs < 300 ? health.getInputStream() : health.getErrorStream());
+                    if (hs < 200 || hs >= 300) throw new Exception("Worker Health Check ব্যর্থ (HTTP " + hs + ")");
+                    JSONObject healthJson = new JSONObject(healthBody);
+                    if (!healthJson.optBoolean("ok", false)) throw new Exception("Worker চালু আছে, কিন্তু Health Check OK নয়");
+                    auth = (HttpURLConnection) new URL(base + "/v1/generate").openConnection();
+                    auth.setRequestMethod("POST");
+                    auth.setConnectTimeout(12000);
+                    auth.setReadTimeout(15000);
+                    auth.setDoOutput(true);
+                    auth.setRequestProperty("Content-Type", "application/json");
+                    auth.setRequestProperty("Authorization", "Bearer " + access);
+                    byte[] probe = "{}".getBytes(StandardCharsets.UTF_8);
+                    auth.setFixedLengthStreamingMode(probe.length);
+                    try (OutputStream out = auth.getOutputStream()) { out.write(probe); }
+                    int as = auth.getResponseCode();
+                    String authBody = readStream(as >= 200 && as < 300 ? auth.getInputStream() : auth.getErrorStream());
+                    if (as == 401) throw new Exception("APP_ACCESS_TOKEN ভুল। Cloudflare Worker Secret মিলিয়ে দেখো।");
+                    if (as != 400 || !authBody.contains("contents array")) {
+                        throw new Exception("Worker token যাচাই হয়নি (HTTP " + as + "): " + authBody);
+                    }
+                    saveToken(access);
+                    getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(WORKER_URL_KEY, base).apply();
+                    int projects = healthJson.optInt("configuredProjects", 0);
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "Cloudflare Connected • Gemini projects: " + projects, Toast.LENGTH_LONG).show();
+                        dialog.dismiss();
+                    });
+                } catch (Exception e) {
+                    String message = safeMessage(e);
+                    runOnUiThread(() -> {
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
+                        new AlertDialog.Builder(this).setTitle("সংযোগ হয়নি").setMessage(message)
+                            .setPositiveButton("ঠিক আছে", null).show();
+                    });
+                } finally {
+                    if (health != null) health.disconnect();
+                    if (auth != null) auth.disconnect();
+                }
+            });
+        }));
+        dialog.show();
+    }
+
     private void showTokenDialog() {
         EditText input = new EditText(this);
         input.setSingleLine(true);
@@ -1070,9 +1176,9 @@ public class MainActivity extends Activity {
                 long timeMs = FRAME_COUNT == 1 ? 0 : (durationMs - 1) * i / (FRAME_COUNT - 1);
                 Bitmap frame = retriever.getFrameAtTime(timeMs * 1000,MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
                 if (frame == null) continue;
-                Bitmap scaled = scaleBitmap(frame,384);
+                Bitmap scaled = scaleBitmap(frame,256);
                 ByteArrayOutputStream output = new ByteArrayOutputStream();
-                scaled.compress(Bitmap.CompressFormat.JPEG,55,output);
+                scaled.compress(Bitmap.CompressFormat.JPEG,42,output);
                 frame.recycle();
                 if (scaled != frame) scaled.recycle();
                 JSONObject inline = new JSONObject();
@@ -1096,7 +1202,7 @@ public class MainActivity extends Activity {
         byte[] body = requestBody.toString().getBytes(StandardCharsets.UTF_8);
         if (body.length > MAX_REQUEST_BYTES) throw new Exception("নমুনা ফ্রেমের ডেটা ১ MB সীমা ছাড়িয়েছে। অন্য ছোট ভিডিও দিয়ে চেষ্টা করো।");
 
-        HttpURLConnection connection = (HttpURLConnection)new URL(API_URL).openConnection();
+        HttpURLConnection connection = (HttpURLConnection)new URL(getWorkerBaseUrl() + "/v1/generate").openConnection();
         try {
             connection.setRequestMethod("POST");
             connection.setConnectTimeout(20000);
@@ -1174,7 +1280,7 @@ public class MainActivity extends Activity {
         TextView title = label("AI ভিডিও বিশ্লেষণ",24);
         title.setGravity(Gravity.CENTER);
         panel.addView(title);
-        TextView info = label("ভিডিও থেকে ৫টি নমুনা ফ্রেম নিয়ে Gemini-তে পাঠানো হচ্ছে। সম্পূর্ণ ভিডিও আপলোড হচ্ছে না।",15);
+        TextView info = label("ভিডিও থেকে ৮টি নমুনা ফ্রেম নিয়ে Gemini-তে পাঠানো হচ্ছে। সম্পূর্ণ ভিডিও আপলোড হচ্ছে না।",15);
         info.setPadding(0,dp(18),0,dp(18));
         panel.addView(info);
         ProgressBar progress = new ProgressBar(this);
