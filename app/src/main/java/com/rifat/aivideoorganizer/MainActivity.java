@@ -251,7 +251,7 @@ public class MainActivity extends Activity {
         back.setOnClickListener(v -> recreate());
         addFeatureGrid(page,
             new String[]{"Text to Image","Text to Video","Image to Video","Photo to MP4","Video to Video","Video to Text","AI Subtitles","ভিডিও আইডিয়া"},
-            new String[]{"লেখা থেকে ছবি — ইঞ্জিন এখনো নেই","লেখা থেকে AI ভিডিও — ইঞ্জিন এখনো নেই","ছবি থেকে AI motion — ইঞ্জিন এখনো নেই","স্থির ছবি থেকে MP4 export; AI motion নয়","ভিডিওতে স্থানীয় cartoon filter","ভিডিওর বাংলা কথা লিখে নাও","বাংলা SRT subtitle তৈরি ও সেভ","ভিডিও তৈরির prompt ধারণা"},
+            new String[]{"AI prompt থেকে ছবি তৈরি; ফ্রি volunteer queue","লেখা থেকে AI ভিডিও — ইঞ্জিন এখনো নেই","ছবি থেকে AI motion — ইঞ্জিন এখনো নেই","স্থির ছবি থেকে MP4 export; AI motion নয়","ভিডিওতে স্থানীয় cartoon filter","ভিডিওর বাংলা কথা লিখে নাও","বাংলা SRT subtitle তৈরি ও সেভ","ভিডিও তৈরির prompt ধারণা"},
             new int[]{4,5,6,7,0,1,2,3},
             new Runnable[]{
                 () -> startActivity(new Intent(this, TextToImageActivity.class)),
