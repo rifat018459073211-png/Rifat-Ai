@@ -27,6 +27,9 @@
             android:name=".BestMomentsActivity"
             android:exported="false" />
         <activity
+            android:name=".TextToImageActivity"
+            android:exported="false" />
+        <activity
             android:name=".VideoTranscriptActivity"
             android:exported="false" />
         <activity
