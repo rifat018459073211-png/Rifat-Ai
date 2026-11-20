@@ -27,7 +27,7 @@ public class TextToVoiceActivity extends Activity implements TextToSpeech.OnInit
     private TextToSpeech tts;
     private EditText input;
     private TextView status;
-    private Button speakButton, saveButton;
+    private Button speakButton, generateButton, saveButton;
     private File audioFile;
     private boolean ready = false;
     private boolean bengaliAvailable = false;
@@ -74,6 +74,11 @@ public class TextToVoiceActivity extends Activity implements TextToSpeech.OnInit
         page.addView(speakButton);
         speakButton.setOnClickListener(v -> speakText());
 
+        generateButton = button("অডিও ফাইল তৈরি করো");
+        generateButton.setEnabled(false);
+        page.addView(generateButton);
+        generateButton.setOnClickListener(v -> generateAudioFile());
+
         Button install = button("ভাষার ভয়েস ডেটা ইনস্টল");
         page.addView(install);
         install.setOnClickListener(v -> {
@@ -108,6 +113,8 @@ public class TextToVoiceActivity extends Activity implements TextToSpeech.OnInit
         }
         ready = true;
         tts.setSpeechRate(1.0f);
+        speakButton.setEnabled(true);
+        generateButton.setEnabled(true);
         tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
             @Override public void onStart(String id) {
                 runOnUiThread(() -> status.setText("কণ্ঠ তৈরি হচ্ছে…"));
@@ -115,14 +122,15 @@ public class TextToVoiceActivity extends Activity implements TextToSpeech.OnInit
             @Override public void onDone(String id) {
                 runOnUiThread(() -> {
                     status.setText("অডিও তৈরি হয়েছে। চাইলে ফাইল সেভ করো।");
-                    saveButton.setEnabled(audioFile != null && audioFile.isFile());
                     speakButton.setEnabled(true);
+                    generateButton.setEnabled(true);
                 });
             }
             @Override public void onError(String id) {
                 runOnUiThread(() -> {
                     status.setText("কণ্ঠ তৈরি করা যায়নি। অন্য Text-to-Speech voice নির্বাচন করে চেষ্টা করো।");
                     speakButton.setEnabled(true);
+                    generateButton.setEnabled(true);
                 });
             }
         });
@@ -140,22 +148,54 @@ public class TextToVoiceActivity extends Activity implements TextToSpeech.OnInit
             status.setText("আগে কিছু লেখা লিখো।");
             return;
         }
-        if (!bengaliAvailable && containsBengali(value)) {
-            status.setText("এই ফোনে বাংলা voice পাওয়া যায়নি। ভয়েস ডেটা ইনস্টল করে আবার চেষ্টা করো।");
+        if (!selectVoiceFor(value)) return;
+        speakButton.setEnabled(false);
+        Bundle params = new Bundle();
+        String id = UUID.randomUUID().toString();
+        int result = tts.speak(value, TextToSpeech.QUEUE_FLUSH, params, id);
+        if (result != TextToSpeech.SUCCESS) {
+            speakButton.setEnabled(true);
+            status.setText("লেখা পড়ে শোনানো শুরু করা যায়নি।");
+        }
+    }
+
+    private boolean selectVoiceFor(String value) {
+        Locale locale = containsBengali(value) ? new Locale("bn", "BD") : Locale.US;
+        int result = tts.setLanguage(locale);
+        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+            if (containsBengali(value)) {
+                status.setText("এই ফোনে বাংলা voice নেই। ভাষার ভয়েস ডেটা ইনস্টল করো।");
+                return false;
+            }
+            status.setText("এই ফোনে English voice নেই। Settings থেকে voice data যোগ করো।");
+            return false;
+        }
+        return true;
+    }
+
+    private void generateAudioFile() {
+        if (!ready || tts == null) {
+            status.setText("Text-to-Speech engine এখনো প্রস্তুত নয়।");
             return;
         }
+        String value = input.getText().toString().trim();
+        if (value.isEmpty()) {
+            status.setText("আগে কিছু লেখা লিখো।");
+            return;
+        }
+        if (!selectVoiceFor(value)) return;
         audioFile = new File(getCacheDir(), "rifat-voice-" + System.currentTimeMillis() + ".wav");
         saveButton.setEnabled(false);
-        speakButton.setEnabled(false);
+        generateButton.setEnabled(false);
         Bundle params = new Bundle();
         String id = UUID.randomUUID().toString();
         int result = tts.synthesizeToFile(value, params, audioFile, id);
         if (result != TextToSpeech.SUCCESS) {
-            speakButton.setEnabled(true);
-            status.setText("এই লেখা থেকে অডিও তৈরি শুরু করা যায়নি।");
-            return;
+            generateButton.setEnabled(true);
+            status.setText("অডিও ফাইল তৈরি শুরু করা যায়নি।");
+        } else {
+            status.setText("অডিও ফাইল তৈরি হচ্ছে…");
         }
-        tts.speak(value, TextToSpeech.QUEUE_FLUSH, params, id + "-play");
     }
 
     private boolean containsBengali(String value) {
