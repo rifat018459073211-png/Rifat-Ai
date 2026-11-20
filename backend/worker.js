@@ -7,7 +7,15 @@ const KEY_NAMES = [
   "GEMINI_API_KEY_21", "GEMINI_API_KEY_22", "GEMINI_API_KEY_23", "GEMINI_API_KEY_24"
 ];
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
+// Requested priority: model slot #4 first, then slot #1, followed by verified fallbacks.
+const MODEL_FALLBACKS = [
+  "gemini-3.5-flash-lite",
+  "gemini-3.5-flash",
+  "gemini-3.8-flash",
+  "gemini-3.6-flash",
+  "gemini-3.1-flash-lite"
+];
+const DEFAULT_MODEL = MODEL_FALLBACKS[0];
 const MAX_BODY_BYTES = 1024 * 1024;
 
 function json(data, status = 200, extraHeaders = {}) {
@@ -84,6 +92,7 @@ export default {
         configuredProjectIndexes: projects.map((entry) => entry.index).join(", "),
         appAccessTokenConfigured: typeof env.APP_ACCESS_TOKEN === "string" && env.APP_ACCESS_TOKEN.length > 0,
         model: DEFAULT_MODEL,
+        modelFallbacks: MODEL_FALLBACKS,
         maxRequestBytes: MAX_BODY_BYTES,
         cloudflareUsageAvailable: false,
         note: "Secret values and credential names are never returned. Cloudflare plan usage is not exposed by this health endpoint."
@@ -122,9 +131,8 @@ export default {
       return json({ error: "Request must include a contents array." }, 400, cors);
     }
 
-    const model = typeof payload.model === "string" && /^[a-zA-Z0-9._-]{1,80}$/.test(payload.model)
-      ? payload.model
-      : DEFAULT_MODEL;
+    // The model order is fixed server-side so the preferred model is always tried first.
+    // Never rotate models or credentials to bypass a 429 quota response.
     delete payload.model;
 
     const projects = getConfiguredProjects(env);
@@ -132,59 +140,111 @@ export default {
       return json({ error: "No Gemini project credentials are configured on the backend." }, 503, cors);
     }
 
-    // Try configured independent projects in order only for transient network/5xx
-    // service failures. A 429 is returned immediately; never rotate to evade quota.
     let lastStatus = 502;
-    for (const project of projects) {
-      let response;
-      try {
-        response = await callGemini(project, model, payload);
-      } catch {
-        lastStatus = 502;
-        continue;
+    let lastProject = null;
+    let lastProviderMessage = "";
+
+    for (const model of MODEL_FALLBACKS) {
+      let modelNotFound = false;
+      let authFailures = 0;
+
+      for (const project of projects) {
+        let response;
+        try {
+          response = await callGemini(project, model, payload);
+        } catch {
+          lastStatus = 502;
+          lastProject = project.index;
+          continue;
+        }
+
+        if (response.ok) {
+          const body = await response.text();
+          return new Response(body, {
+            status: response.status,
+            headers: {
+              "content-type": "application/json; charset=utf-8",
+              ...cors,
+              "x-jarvis-gemini-model": model
+            }
+          });
+        }
+
+        lastStatus = response.status;
+        lastProject = project.index;
+
+        if (response.status === 429) {
+          const retryAfter = response.headers.get("retry-after");
+          return json({
+            error: safeErrorMessage(429),
+            status: 429,
+            model,
+            retryAfterSeconds: retryAfter ? Number(retryAfter) || null : null,
+            project: project.index
+          }, 429, {
+            ...cors,
+            ...(retryAfter ? { "retry-after": retryAfter } : {})
+          });
+        }
+
+        if (response.status === 404) {
+          lastProviderMessage = await providerErrorMessage(response);
+          modelNotFound = true;
+          break;
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          authFailures++;
+          lastProviderMessage = await providerErrorMessage(response);
+          continue;
+        }
+
+        if (response.status === 400) {
+          const providerMessage = await providerErrorMessage(response);
+          return json({
+            error: safeErrorMessage(400),
+            status: 400,
+            model,
+            project: project.index,
+            ...(providerMessage ? { providerMessage } : {})
+          }, 400, cors);
+        }
+
+        if (response.status < 500) {
+          const providerMessage = await providerErrorMessage(response);
+          return json({
+            error: safeErrorMessage(response.status),
+            status: response.status,
+            model,
+            project: project.index,
+            ...(providerMessage ? { providerMessage } : {})
+          }, response.status, cors);
+        }
+
+        lastProviderMessage = await providerErrorMessage(response);
       }
 
-      if (response.ok) {
-        const body = await response.text();
-        return new Response(body, {
-          status: response.status,
-          headers: { "content-type": "application/json; charset=utf-8", ...cors }
-        });
-      }
+      if (modelNotFound) continue;
 
-      lastStatus = response.status;
-      if (response.status === 429) {
-        const retryAfter = response.headers.get("retry-after");
+      if (authFailures === projects.length) {
         return json({
-          error: safeErrorMessage(429),
-          status: 429,
-          retryAfterSeconds: retryAfter ? Number(retryAfter) || null : null,
-          project: project.index
-        }, 429, {
-          ...cors,
-          ...(retryAfter ? { "retry-after": retryAfter } : {})
-        });
+          error: safeErrorMessage(lastStatus),
+          status: lastStatus,
+          model,
+          project: lastProject,
+          ...(lastProviderMessage ? { providerMessage: lastProviderMessage } : {})
+        }, lastStatus, cors);
       }
 
-      if ([400, 401, 403, 404].includes(response.status)) {
-        const providerMessage = await providerErrorMessage(response);
-        return json({
-          error: safeErrorMessage(response.status),
-          status: response.status,
-          project: project.index,
-          ...(providerMessage ? { providerMessage } : {})
-        }, response.status, cors);
-      }
-
-      if (response.status < 500) {
-        return json({ error: safeErrorMessage(response.status), status: response.status }, response.status, cors);
-      }
+      // Network/5xx failure across configured projects: try the next model.
     }
 
     return json({
       error: safeErrorMessage(lastStatus),
       status: lastStatus,
-      triedProjects: projects.length
+      modelFallbacksTried: MODEL_FALLBACKS,
+      project: lastProject,
+      ...(lastProviderMessage ? { providerMessage: lastProviderMessage } : {})
     }, 503, cors);
   }
 };
