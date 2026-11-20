@@ -265,7 +265,7 @@ public class MainActivity extends Activity {
         Button tutorial = greenButton("▶  ভিডিও টিউটোরিয়াল");
         page.addView(tutorial, new LinearLayout.LayoutParams(-1, dp(52)));
         tutorial.setOnClickListener(v -> showVideoTutorials());
-        setContentView(scroll);
+        BottomBackLayout.install(this, scroll, () -> recreate());
         animateChildren(page);
     }
 
@@ -349,7 +349,7 @@ public class MainActivity extends Activity {
         Button back = button("←  ফিরে যাও");
         page.addView(back);
         back.setOnClickListener(v -> showCreateVideoPage());
-        setContentView(scroll);
+        BottomBackLayout.install(this, scroll, () -> recreate());
     }
 
     private void startCartoonVideoExport(int style) {
@@ -535,7 +535,7 @@ public class MainActivity extends Activity {
         Button back=button("←  ফিরে যাও");
         page.addView(back);
         back.setOnClickListener(v -> showCreateVideoPage());
-        setContentView(scroll);
+        BottomBackLayout.install(this, scroll, () -> recreate());
     }
 
     private void showReadyMadeVideoLibrary() {
@@ -572,7 +572,7 @@ public class MainActivity extends Activity {
         Button back=button("←  Create Video-তে ফিরে যাও");
         page.addView(back);
         back.setOnClickListener(v -> showCreateVideoPage());
-        setContentView(scroll);
+        BottomBackLayout.install(this, scroll, () -> recreate());
     }
 
     private class FeatureArtView extends View {
@@ -723,7 +723,7 @@ public class MainActivity extends Activity {
         Button backHome = button("← হোমে ফিরে যাও");
         page.addView(backHome, 0);
         backHome.setOnClickListener(v -> recreate());
-        setContentView(scroll);
+        BottomBackLayout.install(this, scroll, () -> recreate());
         animateChildren(page);
     }
 
@@ -764,7 +764,7 @@ public class MainActivity extends Activity {
         Button back = button("← হোমে ফিরে যাও");
         page.addView(back);
         back.setOnClickListener(v -> recreate());
-        setContentView(scroll);
+        BottomBackLayout.install(this, scroll, () -> recreate());
         animateChildren(page);
     }
 
@@ -784,7 +784,7 @@ public class MainActivity extends Activity {
         Button back = button("← টিউটোরিয়ালে ফিরে যাও");
         page.addView(back);
         back.setOnClickListener(v -> showLearningCenter());
-        setContentView(scroll);
+        BottomBackLayout.install(this, scroll, () -> recreate());
         animateChildren(page);
     }
 
@@ -816,7 +816,7 @@ public class MainActivity extends Activity {
         Button back = button("← হোমে ফিরে যাও");
         page.addView(back);
         back.setOnClickListener(v -> recreate());
-        setContentView(scroll);
+        BottomBackLayout.install(this, scroll, () -> recreate());
         animateChildren(page);
     }
 
@@ -1452,7 +1452,7 @@ public class MainActivity extends Activity {
         Button back = button("← ফিরে যাও");
         panel.addView(back);
         back.setOnClickListener(v -> recreate());
-        setContentView(scroll);
+        BottomBackLayout.install(this, scroll, () -> recreate());
         animateChildren(panel);
     }
 
