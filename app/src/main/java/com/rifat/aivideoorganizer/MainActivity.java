@@ -987,35 +987,53 @@ public class MainActivity extends Activity {
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(8), dp(4), dp(8), dp(4));
+
+        TextView intro = label("এই স্ক্রিন থেকেই তোমার Cloudflare Worker যুক্ত করবে। GitHub-এ Token বসাতে হবে না।", 13);
+        intro.setPadding(0, 0, 0, dp(10));
+        form.addView(intro);
+
         EditText endpoint = new EditText(this);
         endpoint.setSingleLine(true);
         endpoint.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        endpoint.setHint("https://your-worker.workers.dev");
+        endpoint.setHint("Cloudflare Worker URL (https://....workers.dev)");
         endpoint.setText(getWorkerBaseUrl());
         form.addView(endpoint);
+
+        boolean tokenAlreadySaved = readStoredToken() != null;
+        TextView tokenLabel = label("Cloudflare APP_ACCESS_TOKEN", 13);
+        tokenLabel.setPadding(0, dp(10), 0, dp(2));
+        form.addView(tokenLabel);
         EditText token = new EditText(this);
         token.setSingleLine(true);
         token.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        token.setHint("Cloudflare APP_ACCESS_TOKEN");
+        token.setHint(tokenAlreadySaved
+            ? "আগের Token রাখতে ফাঁকা রাখো, বদলাতে নতুন Token দাও"
+            : "Cloudflare-এ তৈরি করা APP_ACCESS_TOKEN এখানে দাও");
         form.addView(token);
-        TextView note = label("Worker URL ও APP_ACCESS_TOKEN দাও। Token ফোনের Android Keystore দিয়ে এনক্রিপ্ট করে রাখা হবে। Gemini API Key এখানে দিতে হবে না—সেগুলো Cloudflare Worker-এর Secret-এ থাকবে।", 12);
-        note.setPadding(0, dp(8), 0, 0);
+
+        TextView note = label(
+            "১. Worker URL বসাও। ২. APP_ACCESS_TOKEN প্রথমবার দাও। ৩. Connect ও Test চাপো। " +
+            "Token ফোনে Android Keystore দিয়ে এনক্রিপ্ট করে রাখা হবে। Gemini API Key এখানে নয়—Cloudflare Worker Secrets-এ থাকবে.",
+            12);
+        note.setPadding(0, dp(10), 0, 0);
         form.addView(note);
+
         AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle("Cloudflare Backend সংযোগ")
+            .setTitle("Cloudflare Backend সেটআপ")
             .setView(form)
-            .setNegativeButton("বাতিল", null)
+            .setNegativeButton("বন্ধ", null)
             .setPositiveButton("Connect ও Test", null)
             .create();
         dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             String base = endpoint.getText().toString().trim().replaceAll("/+$", "");
-            String access = token.getText().toString().trim();
+            String enteredToken = token.getText().toString().trim();
+            String access = enteredToken.isEmpty() ? readStoredToken() : enteredToken;
             if (!base.matches("https://[A-Za-z0-9.-]+(:[0-9]{1,5})?")) {
                 endpoint.setError("সঠিক HTTPS Worker URL লিখো");
                 return;
             }
-            if (access.isEmpty()) {
-                token.setError("APP_ACCESS_TOKEN দিতে হবে");
+            if (access == null || access.isEmpty()) {
+                token.setError("প্রথমবার APP_ACCESS_TOKEN দিতে হবে");
                 return;
             }
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
@@ -1032,6 +1050,7 @@ public class MainActivity extends Activity {
                     if (hs < 200 || hs >= 300) throw new Exception("Worker Health Check ব্যর্থ (HTTP " + hs + ")");
                     JSONObject healthJson = new JSONObject(healthBody);
                     if (!healthJson.optBoolean("ok", false)) throw new Exception("Worker চালু আছে, কিন্তু Health Check OK নয়");
+
                     auth = (HttpURLConnection) new URL(base + "/v1/generate").openConnection();
                     auth.setRequestMethod("POST");
                     auth.setConnectTimeout(12000);
@@ -1048,7 +1067,8 @@ public class MainActivity extends Activity {
                     if (as != 400 || !authBody.contains("contents array")) {
                         throw new Exception("Worker token যাচাই হয়নি (HTTP " + as + "): " + authBody);
                     }
-                    saveToken(access);
+
+                    if (!enteredToken.isEmpty()) saveToken(enteredToken);
                     getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(WORKER_URL_KEY, base).apply();
                     int projects = healthJson.optInt("configuredProjects", 0);
                     runOnUiThread(() -> {
