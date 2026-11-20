@@ -65,8 +65,14 @@ export default {
       const projects = getConfiguredProjects(env);
       return json({
         ok: true,
+        service: "Rifat-Ai Cloudflare Worker",
         configuredProjects: projects.length,
-        note: "Secret values and credential names are never returned."
+        configuredProjectIndexes: projects.map((entry) => entry.index).join(", "),
+        appAccessTokenConfigured: typeof env.APP_ACCESS_TOKEN === "string" && env.APP_ACCESS_TOKEN.length > 0,
+        model: DEFAULT_MODEL,
+        maxRequestBytes: MAX_BODY_BYTES,
+        cloudflareUsageAvailable: false,
+        note: "Secret values and credential names are never returned. Cloudflare plan usage is not exposed by this health endpoint."
       }, 200, cors);
     }
 
