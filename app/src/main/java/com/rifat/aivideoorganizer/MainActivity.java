@@ -114,7 +114,22 @@ public class MainActivity extends Activity {
         return t;
     }
 
-    private Button button(String s) { Button b = new Button(this); b.setText(s); return b; }
+    private Button button(String s) {
+        Button b = new Button(this);
+        b.setText(s);
+        b.setAllCaps(false);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        b.setTextColor(Color.WHITE);
+        b.setPadding(dp(16), dp(10), dp(16), dp(10));
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[]{Color.rgb(35, 105, 190), Color.rgb(92, 82, 205)});
+        bg.setCornerRadius(dp(15));
+        bg.setStroke(dp(1), Color.rgb(40, 91, 165));
+        b.setBackground(bg);
+        if (Build.VERSION.SDK_INT >= 21) b.setElevation(dp(2));
+        return b;
+    }
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -142,7 +157,7 @@ public class MainActivity extends Activity {
         addDashboardCard(dashboard, "Video to Text / বাংলা Subtitles", "ভিডিওর কথা লিখে TXT ও SRT বানাও", () -> startActivity(new Intent(this, VideoTranscriptActivity.class)));
         addDashboardCard(dashboard, "AI Video Highlights", "লম্বা ভিডিও থেকে Funny ও গুরুত্বপূর্ণ অংশ খুঁজে ক্লিপ তৈরি করো", () -> showVideoOrganizerPage());
         addDashboardCard(dashboard, "Cloudflare সংযোগ", "তোমার Worker ও Gemini Backend যুক্ত / পরীক্ষা করো", () -> showCloudflareConnection());
-        TextView footer = label("Rifat-Ai • Free tools", 12);
+        TextView footer = label("Rifat-Ai • Version 3.1 • Free tools", 12);
         footer.setTextColor(Color.rgb(125,132,145));
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(0, dp(18), 0, 0);
@@ -1361,7 +1376,7 @@ public class MainActivity extends Activity {
             if (status < 200 || status >= 300) {
                 try {
                     JSONObject err = new JSONObject(response);
-                    throw new Exception(err.optString("error","Backend error") + " (HTTP " + status + ")");
+                    throw new Exception(err.optString("error","Backend error") + (err.has("providerMessage") ? "\\nবিস্তারিত: " + err.optString("providerMessage") : "") + " (HTTP " + status + ")");
                 } catch (org.json.JSONException ignored) {
                     throw new Exception("Backend error (HTTP " + status + ")");
                 }
