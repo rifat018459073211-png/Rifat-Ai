@@ -127,7 +127,7 @@ public class VideoTrimmerActivity extends Activity {
         Button back = button("← ফিরে যাও");
         page.addView(back);
         back.setOnClickListener(v -> finish());
-        setContentView(scroll);
+        BottomBackLayout.install(this, scroll, () -> recreate());
     }
 
     private void startProgressUpdates() {
