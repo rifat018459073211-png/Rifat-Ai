@@ -58,7 +58,7 @@ public class BestMomentsActivity extends Activity {
         status = text("এখনো কোনো ভিডিও নির্বাচন করা হয়নি।",13);
         status.setPadding(0,dp(12),0,dp(12)); page.addView(status);
         results = new LinearLayout(this); results.setOrientation(LinearLayout.VERTICAL); page.addView(results);
-        setContentView(scroll);
+        BottomBackLayout.install(this, scroll, () -> recreate());
     }
 
     private void pickVideo() {
