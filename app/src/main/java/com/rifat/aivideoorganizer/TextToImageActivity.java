@@ -71,6 +71,8 @@ public class TextToImageActivity extends Activity {
         android.graphics.drawable.GradientDrawable green = new android.graphics.drawable.GradientDrawable();
         green.setColor(Color.rgb(25,155,91)); green.setCornerRadius(dp(14));
         generate.setBackground(green);
+        generate.setCompoundDrawablesWithIntrinsicBounds(android.R.drawable.ic_menu_gallery, 0, 0, 0);
+        generate.setCompoundDrawablePadding(dp(10));
         LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(-1,dp(54));
         gp.topMargin=dp(12); page.addView(generate,gp);
         progress = new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
@@ -85,7 +87,7 @@ public class TextToImageActivity extends Activity {
         LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(-1,-2);
         ip.topMargin=dp(8); page.addView(preview,ip);
         generate.setOnClickListener(v -> startGeneration());
-        setContentView(scroll);
+        BottomBackLayout.install(this, scroll, () -> recreate());
     }
 
     private void startGeneration() {
