@@ -31,6 +31,7 @@ public class TextToVoiceActivity extends Activity implements TextToSpeech.OnInit
     private File audioFile;
     private boolean ready = false;
     private boolean bengaliAvailable = false;
+    private Locale bengaliLocale = new Locale("bn", "BD");
 
     private int dp(int n) { return (int)(n * getResources().getDisplayMetrics().density); }
 
@@ -106,7 +107,8 @@ public class TextToVoiceActivity extends Activity implements TextToSpeech.OnInit
         }
         int language = tts.setLanguage(new Locale("bn", "BD"));
         if (language == TextToSpeech.LANG_MISSING_DATA || language == TextToSpeech.LANG_NOT_SUPPORTED) {
-            int fallback = tts.setLanguage(new Locale("bn", "IN"));
+            bengaliLocale = new Locale("bn", "IN");
+            int fallback = tts.setLanguage(bengaliLocale);
             bengaliAvailable = fallback != TextToSpeech.LANG_MISSING_DATA && fallback != TextToSpeech.LANG_NOT_SUPPORTED;
         } else {
             bengaliAvailable = true;
@@ -121,7 +123,12 @@ public class TextToVoiceActivity extends Activity implements TextToSpeech.OnInit
             }
             @Override public void onDone(String id) {
                 runOnUiThread(() -> {
-                    status.setText("অডিও তৈরি হয়েছে। চাইলে ফাইল সেভ করো।");
+                    if (id.startsWith("file-")) {
+                        status.setText("অডিও ফাইল তৈরি হয়েছে। এখন সেভ করতে পারো।");
+                        saveButton.setEnabled(audioFile != null && audioFile.isFile());
+                    } else {
+                        status.setText("লেখা পড়া শেষ হয়েছে।");
+                    }
                     speakButton.setEnabled(true);
                     generateButton.setEnabled(true);
                 });
@@ -151,7 +158,7 @@ public class TextToVoiceActivity extends Activity implements TextToSpeech.OnInit
         if (!selectVoiceFor(value)) return;
         speakButton.setEnabled(false);
         Bundle params = new Bundle();
-        String id = UUID.randomUUID().toString();
+        String id = "speech-" + UUID.randomUUID();
         int result = tts.speak(value, TextToSpeech.QUEUE_FLUSH, params, id);
         if (result != TextToSpeech.SUCCESS) {
             speakButton.setEnabled(true);
@@ -160,7 +167,7 @@ public class TextToVoiceActivity extends Activity implements TextToSpeech.OnInit
     }
 
     private boolean selectVoiceFor(String value) {
-        Locale locale = containsBengali(value) ? new Locale("bn", "BD") : Locale.US;
+        Locale locale = containsBengali(value) ? bengaliLocale : Locale.US;
         int result = tts.setLanguage(locale);
         if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
             if (containsBengali(value)) {
@@ -188,7 +195,7 @@ public class TextToVoiceActivity extends Activity implements TextToSpeech.OnInit
         saveButton.setEnabled(false);
         generateButton.setEnabled(false);
         Bundle params = new Bundle();
-        String id = UUID.randomUUID().toString();
+        String id = "file-" + UUID.randomUUID();
         int result = tts.synthesizeToFile(value, params, audioFile, id);
         if (result != TextToSpeech.SUCCESS) {
             generateButton.setEnabled(true);
