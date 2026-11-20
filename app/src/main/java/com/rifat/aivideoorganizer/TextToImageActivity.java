@@ -136,10 +136,13 @@ public class TextToImageActivity extends Activity {
                 update("তৈরি হওয়া ছবি ডাউনলোড হচ্ছে…");
                 byte[] bytes = download(imageUrl);
                 if(bytes.length<1000) throw new IOException("AI থেকে পাওয়া ছবির ফাইলটি অসম্পূর্ণ।");
-                Uri saved = saveImage(bytes);
                 android.graphics.Bitmap bitmap = BitmapFactory.decodeByteArray(bytes,0,bytes.length);
+                if(bitmap==null) throw new IOException("AI থেকে পাওয়া ছবিটি খোলা যাচ্ছে না।");
+                ByteArrayOutputStream normalized = new ByteArrayOutputStream();
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,normalized);
+                saveImage(normalized.toByteArray());
                 main.post(() -> {
-                    if(bitmap!=null) preview.setImageBitmap(bitmap);
+                    preview.setImageBitmap(bitmap);
                     status.setText("ছবি তৈরি ও Gallery/Pictures/Rifat-Ai-তে সেভ হয়েছে।");
                     Toast.makeText(this,"AI ছবি সেভ হয়েছে",Toast.LENGTH_LONG).show();
                 });
@@ -153,7 +156,7 @@ public class TextToImageActivity extends Activity {
     }
 
     private String findAvailableModel() throws Exception {
-        JSONArray models = requestArray("GET",API+"/status/models?type=image");
+        JSONArray models = requestArray("GET",API+"/status/models");
         String fallback = null;
         for(int i=0;i<models.length();i++) {
             JSONObject m=models.getJSONObject(i);
