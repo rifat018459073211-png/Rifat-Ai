@@ -150,13 +150,32 @@ public class MainActivity extends Activity {
         intro.setPadding(0, dp(4), 0, dp(20));
         dashboard.addView(intro);
 
-        addDashboardCard(dashboard, "ভিডিও কাটার", "ভিডিওর অংশ কেটে MP4 হিসেবে সেভ করো", () -> startActivity(new Intent(this, VideoTrimmerActivity.class)));
-        addDashboardCard(dashboard, "Best Moments", "ভিডিওর গুরুত্বপূর্ণ মুহূর্ত খুঁজে ক্লিপ বানাও", () -> startActivity(new Intent(this, BestMomentsActivity.class)));
-        addDashboardCard(dashboard, "Text to Voice", "বাংলা বা অন্য ভাষার লেখা থেকে কণ্ঠ তৈরি করো", () -> startActivity(new Intent(this, TextToVoiceActivity.class)));
-        addDashboardCard(dashboard, "Video to Cartoon", "ভিডিওতে স্থানীয় cartoon filter প্রয়োগ করো", () -> showVideoToVideoPage());
-        addDashboardCard(dashboard, "Video to Text / বাংলা Subtitles", "ভিডিওর কথা লিখে TXT ও SRT বানাও", () -> startActivity(new Intent(this, VideoTranscriptActivity.class)));
-        addDashboardCard(dashboard, "AI Video Highlights", "লম্বা ভিডিও থেকে Funny ও গুরুত্বপূর্ণ অংশ খুঁজে ক্লিপ তৈরি করো", () -> showVideoOrganizerPage());
-        addDashboardCard(dashboard, "Cloudflare সংযোগ", "তোমার Worker ও Gemini Backend যুক্ত / পরীক্ষা করো", () -> showCloudflareConnection());
+        String[] featureTitles = {
+            "ভিডিও কাটার", "Best Moments",
+            "Text to Voice", "Video to Cartoon",
+            "বাংলা Subtitles", "AI Video Highlights",
+            "Cloudflare সংযোগ"
+        };
+        String[] featureDetails = {
+            "ভিডিওর অংশ কেটে MP4 হিসেবে সেভ করো",
+            "ভিডিওর গুরুত্বপূর্ণ মুহূর্ত খুঁজে ক্লিপ বানাও",
+            "বাংলা বা অন্য ভাষার লেখা থেকে কণ্ঠ তৈরি করো",
+            "ভিডিওতে স্থানীয় cartoon filter প্রয়োগ করো",
+            "ভিডিওর কথা লিখে TXT ও SRT বানাও",
+            "লম্বা ভিডিও থেকে গুরুত্বপূর্ণ অংশ খুঁজে ক্লিপ তৈরি করো",
+            "Worker ও Gemini Backend সংযোগ পরীক্ষা করো"
+        };
+        int[] featureArt = {0, 1, 2, 3, 4, 5, 6};
+        Runnable[] featureActions = {
+            () -> startActivity(new Intent(this, VideoTrimmerActivity.class)),
+            () -> startActivity(new Intent(this, BestMomentsActivity.class)),
+            () -> startActivity(new Intent(this, TextToVoiceActivity.class)),
+            () -> showVideoToVideoPage(),
+            () -> startActivity(new Intent(this, VideoTranscriptActivity.class)),
+            () -> showVideoOrganizerPage(),
+            () -> showCloudflareConnection()
+        };
+        addFeatureGrid(dashboard, featureTitles, featureDetails, featureArt, featureActions);
         TextView footer = label("Rifat-Ai • Version 3.1 • Free tools", 12);
         footer.setTextColor(Color.rgb(125,132,145));
         footer.setGravity(Gravity.CENTER);
@@ -195,9 +214,9 @@ public class MainActivity extends Activity {
                 final int index = i + col;
                 LinearLayout card = new LinearLayout(this);
                 card.setOrientation(LinearLayout.VERTICAL);
-                card.setBackground(roundBackground(Color.WHITE, Color.rgb(226,232,241), 16));
+                card.setBackground(roundBackground(Color.WHITE, Color.rgb(226,232,241), 0));
                 card.setClipToOutline(true);
-                card.setElevation(dp(2));
+                card.setElevation(dp(1));
                 FeatureArtView artwork = new FeatureArtView(this, art[index]);
                 card.addView(artwork, new LinearLayout.LayoutParams(-1, dp(112)));
                 TextView heading = label(titles[index], 15);
