@@ -41,6 +41,7 @@ public class BestMomentsActivity extends Activity {
     private LinearLayout results;
     private Uri videoUri;
     private File pendingExport;
+    private Button pendingAction;
     private static final int SAVE_CLIP = 711;
 
     private int dp(int n) { return (int)(n * getResources().getDisplayMetrics().density); }
@@ -81,6 +82,36 @@ public class BestMomentsActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data) {
         super.onActivityResult(requestCode,resultCode,data);
+        if (requestCode == SAVE_CLIP) {
+            if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+                if (pendingExport != null) pendingExport.delete();
+                if (pendingAction != null) pendingAction.setEnabled(true);
+                status.setText("ক্লিপ সেভ বাতিল হয়েছে।");
+                return;
+            }
+            Uri destination = data.getData();
+            worker.execute(() -> {
+                try (InputStream in = new FileInputStream(pendingExport);
+                     OutputStream out = getContentResolver().openOutputStream(destination, "w")) {
+                    if (out == null) throw new Exception("নির্বাচিত জায়গায় লেখা যায়নি");
+                    byte[] buffer = new byte[8192];
+                    int count;
+                    while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+                    out.flush();
+                    if (pendingExport != null) pendingExport.delete();
+                    runOnUiThread(() -> {
+                        if (pendingAction != null) pendingAction.setEnabled(true);
+                        status.setText("সফল! Best Moment MP4 ক্লিপ সেভ হয়েছে।");
+                    });
+                } catch (Exception e) {
+                    runOnUiThread(() -> {
+                        if (pendingAction != null) pendingAction.setEnabled(true);
+                        status.setText("ক্লিপ সেভ হয়নি: " + e.getMessage());
+                    });
+                }
+            });
+            return;
+        }
         if(requestCode != PICK_VIDEO || resultCode != RESULT_OK || data == null || data.getData() == null) return;
         videoUri = data.getData();
         try { getContentResolver().takePersistableUriPermission(videoUri,data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION)); } catch(Exception ignored) {}
@@ -176,6 +207,7 @@ public class BestMomentsActivity extends Activity {
             return;
         }
         action.setEnabled(false);
+        pendingAction = action;
         status.setText("MP4 ক্লিপ তৈরি হচ্ছে…");
         try {
             File folder = new File(getCacheDir(), "best_moments");
@@ -223,34 +255,7 @@ public class BestMomentsActivity extends Activity {
         } finally {
             try { retriever.release(); } catch (Exception ignored) {}
         }
-    }
-
-    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != SAVE_CLIP) return;
-        if (resultCode != RESULT_OK || data == null || data.getData() == null) {
-            if (pendingExport != null) pendingExport.delete();
-            status.setText("ক্লিপ সেভ বাতিল হয়েছে।");
-            return;
-        }
-        Uri destination = data.getData();
-        worker.execute(() -> {
-            try (InputStream in = new FileInputStream(pendingExport);
-                 OutputStream out = getContentResolver().openOutputStream(destination, "w")) {
-                if (out == null) throw new Exception("নির্বাচিত জায়গায় লেখা যায়নি");
-                byte[] buffer = new byte[8192];
-                int count;
-                while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
-                out.flush();
-                pendingExport.delete();
-                runOnUiThread(() -> status.setText("সফল! Best Moment MP4 ক্লিপ সেভ হয়েছে।"));
-            } catch (Exception e) {
-                runOnUiThread(() -> status.setText("ক্লিপ সেভ হয়নি: " + e.getMessage()));
-            }
-        });
-    }
-
-    private String time(long ms) {
+    }    private String time(long ms) {
         long sec=ms/1000; return String.format(Locale.getDefault(),"%02d:%02d",sec/60,sec%60);
     }
     @Override protected void onDestroy(){super.onDestroy();worker.shutdownNow();}
