@@ -31,6 +31,13 @@ import android.security.keystore.KeyProperties;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import androidx.media3.common.MediaItem;
+import androidx.media3.transformer.Composition;
+import androidx.media3.transformer.EditedMediaItem;
+import androidx.media3.transformer.ExportException;
+import androidx.media3.transformer.ExportResult;
+import androidx.media3.transformer.Transformer;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -75,6 +82,8 @@ public class MainActivity extends Activity {
     private TextView videoToVideoSelectedText, videoToVideoStatus;
     private ProgressBar videoToVideoProgress;
     private Button videoToVideoGenerateButton;
+    private File pendingAiClip;
+    private Button pendingAiClipButton;
     private FrameLayout rootLayout;
     private View startupGate;
     private View mainContent;
@@ -1167,10 +1176,12 @@ public class MainActivity extends Activity {
                 "Video total duration: " + (durationMs / 1000.0) + " seconds. " +
                 "Requested category: " + selectedCategory + ". Requested clip duration: " + selectedDuration + ". " +
                 "Analyze only the supplied frames, which are sampled across the full video. " +
-                "Return concise Bengali guidance with approximate timestamps in seconds, a short reason for each moment, " +
-                "and a suggested clip start/end time. Keep the suggested duration close to the requested duration when possible. " +
-                "Never invent visual details between frames. Clearly state that timestamps are estimates based on sparse samples. " +
-                "If the frames do not provide enough evidence, say so.");
+                "Find up to 5 likely highlight moments. Return ONLY valid JSON, no markdown, with this schema: " +
+                "{\\\"highlights\\\":[{\\\"start_seconds\\\":12.0,\\\"end_seconds\\\":32.0,\\\"title\\\":\\\"short Bengali title\\\",\\\"reason\\\":\\\"short Bengali reason\\\"}]}. " +
+                "Each clip should be close to the requested duration and remain within the video duration. " +
+                "Prioritize the requested category, but do not claim a moment is funny unless visible evidence supports it. " +
+                "Only use evidence from supplied frames. Timestamps are estimates because samples are sparse. " +
+                "If there is not enough evidence, return {\\\"highlights\\\":[]}");
             parts.put(prompt);
             for (int i=0;i<FRAME_COUNT;i++) {
                 long timeMs = FRAME_COUNT == 1 ? 0 : (durationMs - 1) * i / (FRAME_COUNT - 1);
@@ -1366,21 +1377,113 @@ public class MainActivity extends Activity {
         panel.setPadding(dp(20),dp(24),dp(20),dp(24));
         panel.setBackgroundColor(Color.rgb(246,248,252));
         scroll.addView(panel);
-        TextView resultTitle = label("Gemini বিশ্লেষণের ফলাফল",23);
+        TextView resultTitle = label("AI ভিডিও Highlights",23);
         resultTitle.setTextColor(Color.rgb(35,75,145));
         panel.addView(resultTitle);
         TextView resultMeta = label("ক্যাটাগরি: " + selectedCategory + "  •  লক্ষ্য দৈর্ঘ্য: " + selectedDuration,13);
-        resultMeta.setPadding(0,dp(8),0,0);
+        resultMeta.setPadding(0,dp(8),0,dp(12));
         panel.addView(resultMeta);
-        TextView answer = label(result,16);
-        answer.setPadding(0,dp(18),0,dp(22));
-        panel.addView(answer);
-        panel.addView(label("এটি নমুনা ফ্রেম-ভিত্তিক আনুমানিক বিশ্লেষণ। এখনো স্বয়ংক্রিয় ক্লিপ কাটা বা সেভ করা হয়নি।",13));
+        JSONArray highlights = parseHighlights(result);
+        if (highlights != null && highlights.length() > 0) {
+            panel.addView(label("AI যে অংশগুলো নির্বাচন করেছে",17));
+            for (int i=0; i<highlights.length(); i++) {
+                JSONObject item = highlights.optJSONObject(i);
+                if (item == null) continue;
+                double start = item.optDouble("start_seconds", -1);
+                double end = item.optDouble("end_seconds", -1);
+                if (start < 0 || end <= start) continue;
+                LinearLayout card = new LinearLayout(this);
+                card.setOrientation(LinearLayout.VERTICAL);
+                card.setPadding(dp(12),dp(12),dp(12),dp(12));
+                card.setBackground(roundBackground(Color.WHITE,Color.rgb(225,231,241),14));
+                TextView heading = label((i+1) + ". " + item.optString("title","Highlight"),16);
+                heading.setTextColor(Color.rgb(35,75,145));
+                card.addView(heading);
+                card.addView(label(String.format(java.util.Locale.getDefault(),"সময়: %s – %s", formatSeconds(start), formatSeconds(end)),13));
+                TextView reason = label(item.optString("reason",""),13);
+                reason.setPadding(0,dp(5),0,dp(8));
+                card.addView(reason);
+                Button export = greenButton("▶ MP4 ক্লিপ তৈরি ও সেভ");
+                card.addView(export);
+                final double clipStart = start, clipEnd = end;
+                export.setOnClickListener(v -> exportAiHighlight(clipStart,clipEnd,export));
+                LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1,-2);
+                cp.bottomMargin = dp(10);
+                panel.addView(card,cp);
+            }
+        } else {
+            TextView answer = label(result,15);
+            answer.setPadding(0,dp(12),0,dp(18));
+            panel.addView(answer);
+            panel.addView(label("AI থেকে ব্যবহারযোগ্য clip timestamp পাওয়া যায়নি। আবার বিশ্লেষণ করো বা Best Moments ব্যবহার করো।",13));
+        }
         Button back = button("← ফিরে যাও");
         panel.addView(back);
         back.setOnClickListener(v -> recreate());
         BottomBackLayout.install(this, scroll, () -> recreate());
         animateChildren(panel);
+    }
+
+    private JSONArray parseHighlights(String raw) {
+        try {
+            int first = raw.indexOf('{');
+            int last = raw.lastIndexOf('}');
+            if (first < 0 || last <= first) return null;
+            JSONObject root = new JSONObject(raw.substring(first,last+1));
+            return root.optJSONArray("highlights");
+        } catch (Exception e) { return null; }
+    }
+
+    private String formatSeconds(double seconds) {
+        long total = Math.max(0,(long)seconds);
+        return String.format(java.util.Locale.getDefault(),"%02d:%02d",total/60,total%60);
+    }
+
+    private void exportAiHighlight(double startSeconds, double endSeconds, Button action) {
+        if (selectedVideo == null) {
+            Toast.makeText(this,"ভিডিও আবার নির্বাচন করো।",Toast.LENGTH_SHORT).show();
+            return;
+        }
+        long startMs = Math.max(0,(long)(startSeconds*1000));
+        long endMs = Math.max(startMs+500,(long)(endSeconds*1000));
+        action.setEnabled(false);
+        pendingAiClipButton = action;
+        try {
+            File folder = new File(getCacheDir(),"ai_highlights");
+            if (!folder.exists() && !folder.mkdirs()) throw new Exception("ক্যাশ ফোল্ডার তৈরি হয়নি");
+            pendingAiClip = new File(folder,"Rifat-Ai-AI-Highlight-"+System.currentTimeMillis()+".mp4");
+            MediaItem item = new MediaItem.Builder().setUri(selectedVideo)
+                .setClippingConfiguration(new MediaItem.ClippingConfiguration.Builder()
+                    .setStartPositionMs(startMs).setEndPositionMs(endMs).build()).build();
+            EditedMediaItem edited = new EditedMediaItem.Builder(item).build();
+            Transformer transformer = new Transformer.Builder(this).addListener(new Transformer.Listener() {
+                @Override public void onCompleted(Composition composition, ExportResult result) {
+                    runOnUiThread(() -> {
+                        Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                        save.addCategory(Intent.CATEGORY_OPENABLE);
+                        save.setType("video/mp4");
+                        save.putExtra(Intent.EXTRA_TITLE,"Rifat-Ai-Highlight.mp4");
+                        startActivityForResult(save,501);
+                    });
+                }
+                @Override public void onError(Composition composition, ExportResult result, ExportException error) {
+                    runOnUiThread(() -> {
+                        action.setEnabled(true);
+                        if (pendingAiClip != null) pendingAiClip.delete();
+                        new AlertDialog.Builder(MainActivity.this).setTitle("ক্লিপ তৈরি হয়নি")
+                            .setMessage(error.getMessage() == null ? "ভিডিও ফরম্যাট সমর্থিত নয়" : error.getMessage())
+                            .setPositiveButton("ঠিক আছে",null).show();
+                    });
+                }
+            }).build();
+            transformer.start(edited,pendingAiClip.getAbsolutePath());
+            Toast.makeText(this,"AI Highlight MP4 তৈরি হচ্ছে…",Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            action.setEnabled(true);
+            if (pendingAiClip != null) pendingAiClip.delete();
+            new AlertDialog.Builder(this).setTitle("Export শুরু হয়নি")
+                .setMessage(safeMessage(e)).setPositiveButton("ঠিক আছে",null).show();
+        }
     }
 
     private void showFailure(String message) {
@@ -1400,6 +1503,37 @@ public class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode,resultCode,data);
+        if (requestCode == 501) {
+            if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+                if (pendingAiClip != null) pendingAiClip.delete();
+                if (pendingAiClipButton != null) pendingAiClipButton.setEnabled(true);
+                Toast.makeText(this, "ক্লিপ সেভ বাতিল হয়েছে।", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            Uri destination = data.getData();
+            executor.execute(() -> {
+                try (InputStream in = new java.io.FileInputStream(pendingAiClip);
+                     OutputStream out = getContentResolver().openOutputStream(destination, "w")) {
+                    if (out == null) throw new Exception("সেভ লোকেশন খোলা যায়নি");
+                    byte[] buffer = new byte[8192];
+                    int count;
+                    while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+                    out.flush();
+                    pendingAiClip.delete();
+                    runOnUiThread(() -> {
+                        if (pendingAiClipButton != null) pendingAiClipButton.setEnabled(true);
+                        Toast.makeText(this, "AI Highlight MP4 সেভ হয়েছে।", Toast.LENGTH_LONG).show();
+                    });
+                } catch (Exception e) {
+                    runOnUiThread(() -> {
+                        if (pendingAiClipButton != null) pendingAiClipButton.setEnabled(true);
+                        new AlertDialog.Builder(this).setTitle("ক্লিপ সেভ হয়নি")
+                            .setMessage(safeMessage(e)).setPositiveButton("ঠিক আছে", null).show();
+                    });
+                }
+            });
+            return;
+        }
         if (requestCode == 302 && resultCode == RESULT_OK && data != null && data.getData() != null) {
             videoToVideoUri = data.getData();
             try { getContentResolver().takePersistableUriPermission(videoToVideoUri, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
