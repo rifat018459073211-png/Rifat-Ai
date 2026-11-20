@@ -485,7 +485,7 @@ public class MainActivity extends Activity {
         }
         Button back=button("←  Create Video-তে ফিরে যাও");
         page.addView(back);
-        back.setOnClickListener(v -> showCreateVideoPage());
+        back.setOnClickListener(v -> recreate());
         BottomBackLayout.install(this, scroll, () -> recreate());
     }
 
