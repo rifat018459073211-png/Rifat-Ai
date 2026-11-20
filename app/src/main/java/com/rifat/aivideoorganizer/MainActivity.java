@@ -254,7 +254,7 @@ public class MainActivity extends Activity {
             new String[]{"লেখা থেকে ছবি — ইঞ্জিন এখনো নেই","লেখা থেকে AI ভিডিও — ইঞ্জিন এখনো নেই","ছবি থেকে AI motion — ইঞ্জিন এখনো নেই","স্থির ছবি থেকে MP4 export; AI motion নয়","ভিডিওতে স্থানীয় cartoon filter","ভিডিওর বাংলা কথা লিখে নাও","বাংলা SRT subtitle তৈরি ও সেভ","ভিডিও তৈরির prompt ধারণা"},
             new int[]{4,5,6,7,0,1,2,3},
             new Runnable[]{
-                () -> showGeneratorInfo("Text to Image","বাস্তব image-generation engine এই ফোনে নির্ভরযোগ্যভাবে চালানোর উপযোগিতা এখনো যাচাই হয়নি।"),
+                () -> startActivity(new Intent(this, TextToImageActivity.class)),
                 () -> showGeneratorInfo("Text to Video","ফ্রি ও এই ফোনে সমর্থিত বাস্তব text-to-video engine এখনো যাচাই হয়নি।"),
                 () -> showGeneratorInfo("Image to Video","AI motion engine এখনো নেই। Photo to MP4 শুধু স্থির ছবি export করে।"),
                 () -> startActivity(new Intent(this, PhotoToVideoActivity.class)),
