@@ -129,6 +129,7 @@ public class MainActivity extends Activity {
         addDashboardCard(dashboard, "Text to Voice", "বাংলা বা অন্য ভাষার লেখা থেকে কণ্ঠ তৈরি করো", () -> startActivity(new Intent(this, TextToVoiceActivity.class)));
         addDashboardCard(dashboard, "Video to Cartoon", "ভিডিওতে স্থানীয় cartoon filter প্রয়োগ করো", () -> showVideoToVideoPage());
         addDashboardCard(dashboard, "Video to Text / বাংলা Subtitles", "ভিডিওর কথা লিখে TXT ও SRT বানাও", () -> startActivity(new Intent(this, VideoTranscriptActivity.class)));
+        addDashboardCard(dashboard, "AI Video Highlights", "লম্বা ভিডিও থেকে Funny ও গুরুত্বপূর্ণ অংশ খুঁজে ক্লিপ তৈরি করো", () -> showVideoOrganizerPage());
         TextView footer = label("Rifat-Ai • Free tools", 12);
         footer.setTextColor(Color.rgb(125,132,145));
         footer.setGravity(Gravity.CENTER);
