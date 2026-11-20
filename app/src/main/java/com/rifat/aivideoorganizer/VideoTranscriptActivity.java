@@ -85,7 +85,7 @@ public class VideoTranscriptActivity extends Activity {
         saveSrt.setOnClickListener(v -> saveFile(SAVE_SRT));
         transcript = text("তৈরি হওয়া লেখা এখানে দেখা যাবে।",14);
         transcript.setPadding(0,dp(16),0,0); page.addView(transcript);
-        setContentView(scroll);
+        BottomBackLayout.install(this, scroll, () -> recreate());
     }
 
     private void pickVideo() {
